@@ -138,6 +138,7 @@ var StataRuntimeManager = class {
         yield metadata;
       }
       const openStataPaths = [
+        "/media/abhinav/WorkData/.cargo_target/release/open-stata",
         "/media/abhinav/WorkData/.cargo_target/debug/open-stata",
         "/home/abhinav/.cargo/bin/open-stata",
         "/usr/local/bin/open-stata"

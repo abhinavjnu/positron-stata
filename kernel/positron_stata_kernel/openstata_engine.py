@@ -127,9 +127,9 @@ class OpenStataEngine:
         dataset_changed = False
         load_match = re.search(r'\(Loaded dataset with (\d+) variables, (\d+) observations\)', output)
         if load_match or any(kw in code.lower() for kw in ("use ", "sysuse ", "clear", "drop ", "keep ", "generate ", "gen ", "replace ")):
-            self._sync_dataset_state()
-            dataset_changed = (self._last_obs != self._last_dataset_info.get("obs", 0) or
-                               self._last_vars != self._last_dataset_info.get("vars", 0))
+            dataset_changed = self._sync_dataset_state(code)
+            if load_match:
+                dataset_changed = True
 
         # Check for graphics generation (e.g. scatter, twoway, hist)
         plots = self._check_and_generate_plots(code)
@@ -142,12 +142,22 @@ class OpenStataEngine:
             request_open_data_explorer=request_open_data_explorer
         )
 
-    def _sync_dataset_state(self):
+    def _sync_dataset_state(self, cmd_code: str = "") -> bool:
         """Export active dataset to temporary CSV and update in-memory DataFrame and schema."""
         if not self._proc or self._proc.poll() is not None:
-            return
+            return False
 
         try:
+            # Extract dataset name if command was use/sysuse
+            name_match = re.search(r'(?:sysuse|use)\s+["\']?([^,\s"\']+)', cmd_code, re.IGNORECASE)
+            if name_match:
+                ds = name_match.group(1).strip()
+                if not ds.endswith(".dta"):
+                    ds += ".dta"
+                self._dataset_name = os.path.basename(ds)
+            elif not hasattr(self, "_dataset_name") or not self._dataset_name:
+                self._dataset_name = "auto.dta"
+
             tmp = tempfile.mktemp(suffix=".csv")
             self._proc.stdin.write(f'export delimited using "{tmp}", replace\n')
             self._read_until_sentinel()
@@ -157,10 +167,13 @@ class OpenStataEngine:
                 self._current_df = df
                 obs = len(df)
                 vars_cnt = len(df.columns)
+                changed = (obs != self._last_obs or vars_cnt != self._last_vars or
+                           list(df.columns) != self._last_dataset_info.get("var_names", []))
+
                 self._last_dataset_info = {
                     "obs": obs,
                     "vars": vars_cnt,
-                    "name": "Active Dataset (OpenStata)",
+                    "name": self._dataset_name,
                     "var_names": list(df.columns),
                     "var_types": {col: str(df[col].dtype) for col in df.columns},
                     "var_labels": {col: f"Variable {col}" for col in df.columns}
@@ -168,8 +181,17 @@ class OpenStataEngine:
                 self._last_obs = obs
                 self._last_vars = vars_cnt
                 os.remove(tmp)
+                return changed
+            else:
+                if self._last_obs > 0 or self._last_vars > 0:
+                    self._last_obs = 0
+                    self._last_vars = 0
+                    self._current_df = None
+                    self._last_dataset_info = {"obs": 0, "vars": 0, "name": "empty", "var_names": [], "var_types": {}, "var_labels": {}}
+                    return True
         except Exception:
             pass
+        return False
 
     def _check_and_generate_plots(self, code: str) -> List[str]:
         """Generate high-quality SVG vector graphic for Positron Plots tab."""

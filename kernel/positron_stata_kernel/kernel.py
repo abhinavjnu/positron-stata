@@ -113,6 +113,7 @@ class PositronStataKernel(Kernel):
             else:
                 self.engine = StataEngine()
                 self._send_stdout("Switched to Stata 19 MP (Official) engine.\n")
+            self.variables_handler.send_refresh_event()
             return {
                 "status": "ok",
                 "execution_count": self.execution_count,
