@@ -1,0 +1,154 @@
+{
+  "name": "positron-stata",
+  "displayName": "Stata Support for Positron",
+  "description": "First-class Stata and OpenStata support for Positron IDE with native Variables, Data Explorer, Plots, and .dta support.",
+  "version": "0.1.0",
+  "publisher": "abhinav",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/abhinavk/positron-stata"
+  },
+  "keywords": [
+    "stata",
+    "open-stata",
+    "econometrics",
+    "data-science",
+    "positron"
+  ],
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Data Science",
+    "Notebooks"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onLanguage:stata",
+    "onCustomEditor:positron-stata.dtaViewer"
+  ],
+  "main": "./dist/extension.js",
+  "extensionDependencies": [
+    "positron.positron-supervisor"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "stata",
+        "aliases": ["Stata", "stata", "Do-file"],
+        "extensions": [".do", ".ado", ".mata", ".ihlp", ".hlp"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "stata",
+        "scopeName": "source.stata",
+        "path": "./syntaxes/stata.tmLanguage.json"
+      }
+    ],
+    "languageRuntimes": [
+      {
+        "languageId": "stata"
+      }
+    ],
+    "customEditors": [
+      {
+        "viewType": "positron-stata.dtaViewer",
+        "displayName": "Stata Data Explorer (.dta)",
+        "priority": "default",
+        "selector": [
+          {
+            "filenamePattern": "*.dta"
+          },
+          {
+            "filenamePattern": "*.DTA"
+          }
+        ]
+      }
+    ],
+    "commands": [
+      {
+        "command": "stata.runLineOrSelection",
+        "title": "Execute Line or Selection in Stata",
+        "category": "Stata"
+      },
+      {
+        "command": "stata.doFile",
+        "title": "Do File (Execute Current File in Stata)",
+        "category": "Stata"
+      },
+      {
+        "command": "stata.openDataExplorer",
+        "title": "Open Current Dataset in Data Explorer",
+        "category": "Stata"
+      },
+      {
+        "command": "stata.selectEngine",
+        "title": "Select Stata Engine (Stata 19 MP / OpenStata)",
+        "category": "Stata"
+      },
+      {
+        "command": "stata.openDtaInDataExplorer",
+        "title": "Open in Data Explorer",
+        "category": "Stata"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "stata.doFile",
+        "key": "ctrl+shift+d",
+        "mac": "cmd+shift+d",
+        "when": "editorTextFocus && editorLangId == 'stata'"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "stata.openDtaInDataExplorer",
+          "group": "navigation",
+          "when": "resourceExtname == .dta || resourceExtname == .DTA"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "workbench.action.positronConsole.executeCode",
+          "group": "1_stata@1",
+          "when": "editorLangId == 'stata'"
+        },
+        {
+          "command": "stata.doFile",
+          "group": "1_stata@2",
+          "when": "editorLangId == 'stata'"
+        },
+        {
+          "command": "stata.openDataExplorer",
+          "group": "1_stata@3",
+          "when": "editorLangId == 'stata'"
+        }
+      ],
+      "editor/title/run": [
+        {
+          "command": "workbench.action.positronConsole.executeCode",
+          "group": "navigation@0",
+          "icon": "$(play)",
+          "title": "Run Selection or Current Line",
+          "when": "resourceLangId == 'stata' && !isInDiffEditor"
+        },
+        {
+          "command": "stata.doFile",
+          "group": "navigation@1",
+          "icon": "$(run-all)",
+          "title": "Do File (Execute Current File)",
+          "when": "resourceLangId == 'stata' && !isInDiffEditor"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.js",
+    "watch": "node esbuild.js --watch"
+  }
+}

@@ -1,0 +1,145 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Stata",
+  "scopeName": "source.stata",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#macros" },
+    { "include": "#keywords" },
+    { "include": "#constants" },
+    { "include": "#operators" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.continuation.stata",
+          "match": "///.*$"
+        },
+        {
+          "name": "comment.line.double-slash.stata",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.line.asterisk.stata",
+          "match": "^\\s*\\*.*$"
+        },
+        {
+          "name": "comment.block.stata",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.compound.stata",
+          "begin": "`\"",
+          "end": "\"'",
+          "patterns": [
+            { "include": "#macros" }
+          ]
+        },
+        {
+          "name": "string.quoted.double.stata",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            { "name": "constant.character.escape.stata", "match": "\\\\." },
+            { "include": "#macros" }
+          ]
+        }
+      ]
+    },
+    "macros": {
+      "patterns": [
+        {
+          "name": "variable.other.macro.local.stata",
+          "match": "`[a-zA-Z0-9_]+'"
+        },
+        {
+          "name": "variable.other.macro.global.stata",
+          "match": "\\$([a-zA-Z0-9_]+|\\{[a-zA-Z0-9_]+\\})"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.stata",
+          "match": "\\b(if|else|foreach|forvalues|forval|while|in|of)\\b"
+        },
+        {
+          "name": "keyword.declaration.program.stata",
+          "match": "\\b(program|end|syntax|args)\\b"
+        },
+        {
+          "name": "storage.modifier.stata",
+          "match": "\\b(quietly|qui|noisily|noi|capture|cap|preserve|restore)\\b"
+        },
+        {
+          "name": "keyword.other.stata",
+          "match": "\\b(use|sysuse|webuse|save|clear|describe|des|summarize|sum|summarise|tabulate|tab|tab1|tab2|list|browse|br|edit|ed|generate|gen|replace|egen|drop|keep|sort|gsort|by|bysort|bys|merge|append|collapse|reshape|rename|order|format|label|count|recode|duplicates|tostring|destring)\\b"
+        },
+        {
+          "name": "keyword.other.estimation.stata",
+          "match": "\\b(regress|reg|logit|probit|ivregress|ivreg2|reghdfe|xtreg|xtset|areg|qreg|poisson|nbreg|tobit|margins|marginsplot|predict|test|testparm|lincom|nlcom|estimates|ereturn|return)\\b"
+        },
+        {
+          "name": "keyword.other.graphics.stata",
+          "match": "\\b(graph|twoway|scatter|line|histogram|hist|kdensity|bar|box|pie|qnorm|pnorm|matrix|ac|pac|xcorr|binscatter)\\b"
+        },
+        {
+          "name": "storage.type.stata",
+          "match": "\\b(byte|int|long|float|double|str[0-9]+|strL)\\b"
+        },
+        {
+          "name": "keyword.other.temporary.stata",
+          "match": "\\b(tempvar|tempname|tempfile|scalar)\\b"
+        },
+        {
+          "name": "keyword.other.execution.stata",
+          "match": "\\b(do|run|include)\\b"
+        }
+      ]
+    },
+    "constants": {
+      "patterns": [
+        {
+          "name": "constant.numeric.stata",
+          "match": "\\b[0-9]+(\\.[0-9]+)?\\b"
+        },
+        {
+          "name": "constant.language.missing.stata",
+          "match": "(?<=\\s|^)\\.([a-z])?(?=\\s|$|[;,])"
+        },
+        {
+          "name": "constant.language.boolean.stata",
+          "match": "\\b(true|false|TRUE|FALSE)\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.comparison.stata",
+          "match": "(==|!=|~=|<=|>=|<|>)"
+        },
+        {
+          "name": "keyword.operator.logical.stata",
+          "match": "(&|\\||!)"
+        },
+        {
+          "name": "keyword.operator.arithmetic.stata",
+          "match": "(\\+|\\-|\\*|\\/|\\^)"
+        },
+        {
+          "name": "keyword.operator.assignment.stata",
+          "match": "="
+        }
+      ]
+    }
+  }
+}
