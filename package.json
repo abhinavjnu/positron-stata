@@ -54,6 +54,16 @@
         "languageId": "stata"
       }
     ],
+    "configuration": {
+      "title": "Stata / OpenStata",
+      "properties": {
+        "positron-stata.openStataPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the open-stata binary executable."
+        }
+      }
+    },
     "customEditors": [
       {
         "viewType": "positron-stata.dtaViewer",

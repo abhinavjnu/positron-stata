@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as positron from 'positron';
 import * as fs from 'fs';
 import * as path from 'path';
+import { getOpenStataExecutable } from './dtaEditorProvider';
 
 interface SupervisorApi {
     createSession(
@@ -118,20 +119,7 @@ export class StataRuntimeManager implements positron.LanguageRuntimeManager {
             }
 
             // 2. Check for OpenStata (Rust Engine)
-            const openStataPaths = [
-                '/media/abhinav/WorkData/.cargo_target/release/open-stata',
-                '/media/abhinav/WorkData/.cargo_target/debug/open-stata',
-                '/home/abhinav/.cargo/bin/open-stata',
-                '/usr/local/bin/open-stata'
-            ];
-
-            let foundOpenStata: string | undefined;
-            for (const p of openStataPaths) {
-                if (fs.existsSync(p)) {
-                    foundOpenStata = p;
-                    break;
-                }
-            }
+            const foundOpenStata = getOpenStataExecutable();
 
             if (foundOpenStata) {
                 const metadata: positron.LanguageRuntimeMetadata = {
