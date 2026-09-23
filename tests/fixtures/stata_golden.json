@@ -1,0 +1,118 @@
+{
+  "stata_version": "/usr/local/stata19",
+  "edition": "mp",
+  "runs": {
+    "sysuse_auto": {
+      "command": "sysuse auto, clear",
+      "stdout": "(1978 automobile data)\n",
+      "dataset_changed": true,
+      "dataset_info": {
+        "obs": 74,
+        "vars": 12,
+        "name": "auto.dta",
+        "filepath": "/usr/local/stata19/ado/base/a/auto.dta",
+        "var_names": [
+          "make",
+          "price",
+          "mpg",
+          "rep78",
+          "headroom",
+          "trunk",
+          "weight",
+          "length",
+          "turn",
+          "displacement",
+          "gear_ratio",
+          "foreign"
+        ],
+        "var_labels": {
+          "make": "Make and model",
+          "price": "Price",
+          "mpg": "Mileage (mpg)",
+          "rep78": "Repair record 1978",
+          "headroom": "Headroom (in.)",
+          "trunk": "Trunk space (cu. ft.)",
+          "weight": "Weight (lbs.)",
+          "length": "Length (in.)",
+          "turn": "Turn circle (ft.)",
+          "displacement": "Displacement (cu. in.)",
+          "gear_ratio": "Gear ratio",
+          "foreign": "Car origin"
+        },
+        "var_types": {
+          "make": "str18",
+          "price": "int",
+          "mpg": "int",
+          "rep78": "int",
+          "headroom": "float",
+          "trunk": "int",
+          "weight": "int",
+          "length": "int",
+          "turn": "int",
+          "displacement": "int",
+          "gear_ratio": "float",
+          "foreign": "byte"
+        },
+        "var_formats": {
+          "make": "%-18s",
+          "price": "%8.0gc",
+          "mpg": "%8.0g",
+          "rep78": "%8.0g",
+          "headroom": "%6.1f",
+          "trunk": "%8.0g",
+          "weight": "%8.0gc",
+          "length": "%8.0g",
+          "turn": "%8.0g",
+          "displacement": "%8.0g",
+          "gear_ratio": "%6.2f",
+          "foreign": "%8.0g"
+        },
+        "var_value_labels": {
+          "make": "",
+          "price": "",
+          "mpg": "",
+          "rep78": "",
+          "headroom": "",
+          "trunk": "",
+          "weight": "",
+          "length": "",
+          "turn": "",
+          "displacement": "",
+          "gear_ratio": "",
+          "foreign": "origin"
+        }
+      },
+      "error": null
+    },
+    "regress": {
+      "command": "regress price mpg weight foreign",
+      "stdout": "\n      Source |       SS           df       MS      Number of obs   =        74\n-------------+----------------------------------   F(3, 70)        =     23.29\n       Model |   317252881         3   105750960   Prob > F        =    0.0000\n    Residual |   317812515        70  4540178.78   R-squared       =    0.4996\n-------------+----------------------------------   Adj R-squared   =    0.4781\n       Total |   635065396        73  8699525.97   Root MSE        =    2130.8\n\n------------------------------------------------------------------------------\n       price | Coefficient  Std. err.      t    P>|t|     [95% conf. interval]\n-------------+----------------------------------------------------------------\n         mpg |    21.8536   74.22114     0.29   0.769    -126.1758     169.883\n      weight |   3.464706    .630749     5.49   0.000     2.206717    4.722695\n     foreign |    3673.06   683.9783     5.37   0.000     2308.909    5037.212\n       _cons |  -5853.696   3376.987    -1.73   0.087    -12588.88    881.4934\n------------------------------------------------------------------------------\n",
+      "dataset_changed": false,
+      "error": null
+    },
+    "format_mutation": {
+      "command": "format price %10.2f",
+      "dataset_changed": true,
+      "price_format": "%10.2f",
+      "error": null
+    },
+    "scatter": {
+      "command": "scatter price mpg",
+      "plots_count": 1,
+      "has_svg": true,
+      "plot_bytes": 40649,
+      "error": null
+    },
+    "display_do": {
+      "command": "display \"do\"",
+      "stdout": "do\n",
+      "plots_count": 0,
+      "error": null
+    },
+    "error_command": {
+      "command": "unrecognized_cmd_abc",
+      "error": "command unrecognized_cmd_abc is unrecognized\nr(199);",
+      "stdout": ""
+    }
+  }
+}

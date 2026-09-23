@@ -63,9 +63,6 @@ Download the latest `positron-stata-0.1.0.vsix` from [Releases](https://github.c
 ```bash
 # In Positron
 positron --install-extension positron-stata-0.1.0.vsix
-
-# Or in VS Code
-code --install-extension positron-stata-0.1.0.vsix
 ```
 
 Alternatively, in Positron, press `Ctrl+Shift+P`, run **Extensions: Install from VSIX...**, and choose the `.vsix` file.

@@ -10,6 +10,11 @@ import sys
 import tempfile
 from typing import Any, Dict, List, Optional, Tuple
 
+_STRINGS = re.compile(r'`".*?"\'|"[^"\n]*"', re.DOTALL)
+_BLOCK_COMMENTS = re.compile(r"/\*.*?\*/", re.DOTALL)
+_LINE_COMMENTS = re.compile(r"(?:^|\s)//(?!/).*$", re.MULTILINE)
+_STAR_COMMENTS = re.compile(r"^\s*\*.*$", re.MULTILINE)
+
 _PLOT_TRIGGER = re.compile(
     r"\b(graph|twoway|tw|scatter|line|connected|histogram|hist|kdensity|lowess|lpoly|"
     r"marginsplot|coefplot|binscatter|binsreg|bar|hbar|box|hbox|pie|qnorm|pnorm|qqplot|"
@@ -161,7 +166,13 @@ class StataEngine:
     def _check_and_export_plots(self, executed_code: str) -> List[str]:
         """Detect and export any newly generated Stata graphs to SVG."""
         plots = []
-        if not _PLOT_TRIGGER.search(executed_code):
+        # Strip comments and string literals so words like "do" or "line" inside strings/comments don't trigger export
+        clean_code = _STRINGS.sub('""', executed_code)
+        clean_code = _BLOCK_COMMENTS.sub(" ", clean_code)
+        clean_code = _LINE_COMMENTS.sub("", clean_code)
+        clean_code = _STAR_COMMENTS.sub("", clean_code)
+
+        if not _PLOT_TRIGGER.search(clean_code):
             return plots
 
         tmp = None
@@ -177,9 +188,9 @@ class StataEngine:
                     svg_content = f.read()
                 if "<svg" in svg_content:
                     plots.append(svg_content)
-                    # Clear exported graph from memory so it won't be re-exported
+                    # Drop only the default active 'Graph', preserving user-named graphs for `graph combine`
                     try:
-                        self._stata.run("qui graph drop _all")
+                        self._stata.run("qui capture graph drop Graph")
                     except Exception:
                         pass
         except Exception:
@@ -196,13 +207,23 @@ class StataEngine:
     def _dataset_signature(self) -> Tuple:
         data = self._sfi.Data
         n = data.getVarCount()
+        value_label_api = getattr(self._sfi, "ValueLabel", None)
         return (
             data.getObsTotal(),
             n,
             self._sfi.Macro.getGlobal("c(filename)") or "",
             self._sfi.Macro.getGlobal("c(changed)") or "0",
-            # Names, types and labels, so rename/recast/label var refresh the Variables pane.
-            tuple((data.getVarName(i), data.getVarType(i), data.getVarLabel(i)) for i in range(n)),
+            # Names, types, labels, formats and value labels, so rename/recast/label var/format refresh the Variables pane.
+            tuple(
+                (
+                    data.getVarName(i),
+                    data.getVarType(i),
+                    data.getVarLabel(i),
+                    _optional(lambda idx=i: data.getVarFormat(idx)),
+                    _optional(lambda idx=i: value_label_api.getVarValueLabel(idx)) if value_label_api else "",
+                )
+                for i in range(n)
+            ),
         )
 
     def _check_dataset_changed(self) -> bool:

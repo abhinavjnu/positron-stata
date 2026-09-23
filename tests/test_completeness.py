@@ -27,6 +27,7 @@ class TestCompleteness(unittest.TestCase):
         self.assertIncomplete("regress price mpg ///")
         self.assertIncomplete("regress price mpg /// weight follows")
         self.assertComplete("regress price mpg ///\n    weight")
+        self.assertComplete("summarize price // comment ///")
 
     def test_braced_blocks(self):
         self.assertIncomplete("foreach v of varlist * {")

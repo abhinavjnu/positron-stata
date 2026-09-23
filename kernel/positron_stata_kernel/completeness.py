@@ -6,7 +6,7 @@ from typing import Dict
 _STRINGS = re.compile(r'`".*?"\'|"[^"\n]*"', re.DOTALL)
 _BLOCK_COMMENTS = re.compile(r"/\*.*?\*/", re.DOTALL)
 _CONTINUATION = re.compile(r"(?:^|\s)///")
-_LINE_COMMENTS = re.compile(r"(?:^|\s)//.*$", re.MULTILINE)
+_LINE_COMMENTS = re.compile(r"(?:^|\s)//(?!/).*$", re.MULTILINE)
 _STAR_COMMENTS = re.compile(r"^\s*\*.*$", re.MULTILINE)
 _BLOCK_OPEN = re.compile(
     r"^(?:(?:capture|cap|quietly|qui|noisily|noi)\s+)*"
@@ -25,14 +25,16 @@ def check(code: str) -> Dict[str, str]:
     if "/*" in text:
         return INCOMPLETE
 
+    # Strip line and star comments while preserving `///` continuation tokens
+    text = _LINE_COMMENTS.sub("", text)
+    text = _STAR_COMMENTS.sub("", text)
+
     lines = [line for line in text.splitlines() if line.strip()]
     if not lines:
         return COMPLETE
     if _CONTINUATION.search(lines[-1]):
         return INCOMPLETE
 
-    text = _LINE_COMMENTS.sub("", text)
-    text = _STAR_COMMENTS.sub("", text)
     if text.count("{") > text.count("}"):
         return INCOMPLETE
 

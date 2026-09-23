@@ -28,7 +28,7 @@ class FakeStata:
             with open(path, "w", encoding="utf-8") as f:
                 f.write("<svg>" + "x" * 600 + "</svg>")
             return
-        if code == "qui graph drop _all":
+        if "graph drop" in code:
             self.graph_in_memory = False
             return
         if code.startswith("bad"):
@@ -132,12 +132,33 @@ class TestStataEngineUnit(unittest.TestCase):
         self.sfi.Data.vars[0][2] = "Price in dollars"
         self.assertTrue(self.engine.execute('label variable price "Price in dollars"').dataset_changed)
 
+    def test_format_change_refreshes_variables_pane(self):
+        self.engine.execute("sysuse auto")
+        self.sfi.Data.vars[0][3] = "%10.2f"
+        self.assertTrue(self.engine.execute('format price %10.2f').dataset_changed)
+
+    def test_display_do_does_not_export_graph(self):
+        self.engine.execute('display "do"')
+        self.assertFalse(any("graph export" in c for c in self.stata.commands))
+
     def test_dataset_info_includes_formats_and_value_labels(self):
         self.engine.execute("sysuse auto")
         info = self.engine.get_current_dataset_info()
         self.assertEqual(info["var_formats"]["price"], "%8.0gc")
         self.assertEqual(info["var_value_labels"]["foreign"], "origin")
         self.assertEqual(info["var_value_labels"]["price"], "")
+
+    def test_golden_fixture_matches(self):
+        import json
+        fixture_path = os.path.join(repo_root, "tests", "fixtures", "stata_golden.json")
+        if os.path.exists(fixture_path):
+            with open(fixture_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            self.assertIn("sysuse_auto", data["runs"])
+            self.assertEqual(data["runs"]["sysuse_auto"]["dataset_info"]["obs"], 74)
+            self.assertEqual(data["runs"]["sysuse_auto"]["dataset_info"]["vars"], 12)
+            self.assertIn("error_command", data["runs"])
+            self.assertIn("r(199);", data["runs"]["error_command"]["error"])
 
 
 if __name__ == "__main__":
