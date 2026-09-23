@@ -78,10 +78,10 @@ Explore full working examples, sample do-files, and famous public datasets (`nls
 3. Search for `positron-stata` and click **Install**.
 
 ### From `.vsix` Package
-Download the latest `positron-stata-0.1.3.vsix` from [Releases](https://github.com/abhinavjnu/positron-stata/releases) and run:
+Download the latest `positron-stata-0.1.4.vsix` from [Releases](https://github.com/abhinavjnu/positron-stata/releases) and run:
 
 ```bash
-positron --install-extension positron-stata-0.1.3.vsix
+positron --install-extension positron-stata-0.1.4.vsix
 ```
 
 Or open Positron, press `Ctrl+Shift+P` (`Cmd+Shift+P`), and run **Extensions: Install from VSIX...**.
