@@ -9,6 +9,7 @@ import os
 import sys
 import json
 import zipfile
+from xml.sax.saxutils import escape, quoteattr
 
 def build_vsix():
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -19,10 +20,12 @@ def build_vsix():
     name = pkg.get("name", "positron-stata")
     version = pkg.get("version", "0.1.0")
     publisher = pkg.get("publisher", "abhinav")
-    display_name = pkg.get("displayName", "Stata Support for Positron")
-    description = pkg.get("description", "")
-    categories = ",".join(pkg.get("categories", ["Programming Languages"]))
-    keywords = ",".join(pkg.get("keywords", ["stata", "positron"]))
+    display_name = escape(pkg.get("displayName", "Stata Support for Positron"))
+    description = escape(pkg.get("description", ""))
+    categories = escape(",".join(pkg.get("categories", ["Programming Languages"])))
+    keywords = escape(",".join(pkg.get("keywords", ["stata", "positron"])))
+    engine = quoteattr(pkg.get("engines", {}).get("vscode", "^1.90.0"))
+    dependencies = quoteattr(",".join(pkg.get("extensionDependencies", [])))
 
     vsix_filename = f"{name}-{version}.vsix"
     vsix_path = os.path.join(base_dir, vsix_filename)
@@ -33,6 +36,7 @@ def build_vsix():
   <Default Extension=".js" ContentType="application/javascript"/>
   <Default Extension=".json" ContentType="application/json"/>
   <Default Extension=".md" ContentType="text/markdown"/>
+  <Default Extension=".png" ContentType="image/png"/>
   <Default Extension=".py" ContentType="text/x-python"/>
   <Default Extension=".svg" ContentType="image/svg+xml"/>
   <Default Extension=".txt" ContentType="text/plain"/>
@@ -52,8 +56,8 @@ def build_vsix():
     <GalleryFlags>Public</GalleryFlags>
     <Icon>extension/icon.png</Icon>
     <Properties>
-      <Property Id="Microsoft.VisualStudio.Code.Engine" Value="^1.90.0"/>
-      <Property Id="Microsoft.VisualStudio.Code.ExtensionDependencies" Value="positron.positron-supervisor"/>
+      <Property Id="Microsoft.VisualStudio.Code.Engine" Value={engine}/>
+      <Property Id="Microsoft.VisualStudio.Code.ExtensionDependencies" Value={dependencies}/>
       <Property Id="Microsoft.VisualStudio.Code.ExtensionKind" Value="workspace"/>
     </Properties>
   </Metadata>
