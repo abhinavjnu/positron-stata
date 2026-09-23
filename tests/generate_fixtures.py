@@ -144,6 +144,7 @@ def generate():
 
     with open(golden_file, "w", encoding="utf-8") as f:
         json.dump(golden_data, f, indent=2)
+        f.write("\n")
 
     print(f"\nSUCCESS: Generated golden ground truth at:\n{golden_file}")
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-REPO_DIR="/media/abhinav/WorkData/Positron/positron-stata"
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_DIR"
 
 git fetch origin review-fixes --quiet
