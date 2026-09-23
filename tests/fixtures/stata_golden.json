@@ -1,5 +1,6 @@
 {
-  "stata_version": "/usr/local/stata19",
+  "stata_version": "19.5",
+  "stata_home": "/usr/local/stata19",
   "edition": "mp",
   "runs": {
     "sysuse_auto": {
@@ -113,6 +114,67 @@
       "command": "unrecognized_cmd_abc",
       "error": "command unrecognized_cmd_abc is unrecognized\nr(199);",
       "stdout": ""
+    },
+    "graph_combine": {
+      "steps": [
+        {
+          "command": "scatter price mpg, name(g1, replace)",
+          "plots_count": 1,
+          "error": null
+        },
+        {
+          "command": "scatter price weight, name(g2, replace)",
+          "plots_count": 1,
+          "error": null
+        },
+        {
+          "command": "graph combine g1 g2",
+          "plots_count": 1,
+          "error": null
+        },
+        {
+          "command": "generate line = 1",
+          "plots_count": 0,
+          "error": null
+        },
+        {
+          "command": "drop line",
+          "plots_count": 0,
+          "error": null
+        }
+      ]
+    },
+    "rerun_default_plot": {
+      "steps": [
+        {
+          "command": "scatter price mpg",
+          "plots_count": 1,
+          "error": null
+        },
+        {
+          "command": "scatter price mpg",
+          "plots_count": 1,
+          "error": null
+        }
+      ]
+    },
+    "redraw_named_plot": {
+      "steps": [
+        {
+          "command": "scatter price mpg, name(g3, replace)",
+          "plots_count": 1,
+          "error": null
+        },
+        {
+          "command": "scatter price weight, name(g3, replace)",
+          "plots_count": 1,
+          "error": null
+        }
+      ]
+    },
+    "r_results_preserved": {
+      "display_r_mean": "6165.2568",
+      "error": null
     }
   }
 }
