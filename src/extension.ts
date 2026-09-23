@@ -13,6 +13,17 @@ export function activate(context: vscode.ExtensionContext) {
     const runtimeRegistration = positron.runtime.registerLanguageRuntimeManager('stata', runtimeManager);
     context.subscriptions.push(runtimeRegistration);
 
+    // Eagerly trigger discovery so runtime is available in Positron console and runtime registry immediately
+    (async () => {
+        try {
+            for await (const runtime of runtimeManager.discoverAllRuntimes()) {
+                console.log(`Discovered Stata runtime: ${runtime.runtimeName} (${runtime.runtimeId})`);
+            }
+        } catch (err) {
+            console.error('Error during initial Stata runtime discovery:', err);
+        }
+    })();
+
     // 2. Register DTA Custom Editor for viewing .dta files
     const dtaEditorRegistration = DtaCustomEditorProvider.register(context);
     context.subscriptions.push(dtaEditorRegistration);

@@ -252,57 +252,65 @@ var StataRuntimeManager = class {
   get discoveredRuntimeCount() {
     return this._discoveredRuntimeCount;
   }
+  buildRuntimeMetadata(inst, startupBehavior = positron.LanguageRuntimeStartupBehavior.Implicit) {
+    const pythonBin = getPythonExecutable();
+    const kernelPythonPath = path.join(this.context.extensionPath, "kernel");
+    const positronPythonFiles = getPositronPythonFilesPath();
+    const runtimeId = `stata-${inst.version}-${inst.edition}-official`;
+    const envVars = {
+      PYTHONPATH: kernelPythonPath,
+      POSITRON_STATA_ENGINE: "stata",
+      STATA_HOME: inst.homeDir,
+      STATA_EDITION: inst.edition,
+      STATA_VERSION: inst.version
+    };
+    if (positronPythonFiles) {
+      envVars["POSITRON_PYTHON_FILES"] = positronPythonFiles;
+    }
+    return {
+      runtimeId,
+      runtimeName: inst.displayName,
+      runtimeShortName: inst.shortName,
+      runtimeVersion: `${inst.version}.0`,
+      runtimeSource: inst.source,
+      languageName: "Stata",
+      languageId: "stata",
+      languageVersion: inst.version,
+      runtimePath: inst.executable,
+      base64EncodedIconSvg: void 0,
+      startupBehavior,
+      sessionLocation: positron.LanguageRuntimeSessionLocation.Workspace,
+      cacheable: true,
+      extraRuntimeData: {
+        engine: "stata",
+        kernelSpec: {
+          argv: [
+            pythonBin,
+            "-m",
+            "positron_stata_kernel",
+            "-f",
+            "{connection_file}"
+          ],
+          display_name: inst.displayName,
+          language: "stata",
+          interrupt_mode: "message",
+          kernel_protocol_version: "5.3",
+          env: envVars
+        }
+      }
+    };
+  }
   async *discoverAllRuntimes() {
     try {
-      const pythonBin = getPythonExecutable();
-      const kernelPythonPath = path.join(this.context.extensionPath, "kernel");
-      const positronPythonFiles = getPositronPythonFilesPath();
       const stataInstalls = findStataInstallations();
-      for (const inst of stataInstalls) {
-        const runtimeId = `stata-${inst.version}-${inst.edition}-official`;
-        const envVars = {
-          PYTHONPATH: kernelPythonPath,
-          POSITRON_STATA_ENGINE: "stata",
-          STATA_HOME: inst.homeDir,
-          STATA_EDITION: inst.edition,
-          STATA_VERSION: inst.version
-        };
-        if (positronPythonFiles) {
-          envVars["POSITRON_PYTHON_FILES"] = positronPythonFiles;
-        }
-        const metadata = {
-          runtimeId,
-          runtimeName: inst.displayName,
-          runtimeShortName: inst.shortName,
-          runtimeVersion: `${inst.version}.0`,
-          runtimeSource: inst.source,
-          languageName: "Stata",
-          languageId: "stata",
-          languageVersion: inst.version,
-          runtimePath: inst.executable,
-          base64EncodedIconSvg: void 0,
-          startupBehavior: positron.LanguageRuntimeStartupBehavior.StartOnDemand,
-          sessionLocation: positron.LanguageRuntimeSessionLocation.Local,
-          extraRuntimeData: {
-            engine: "stata",
-            kernelSpec: {
-              argv: [
-                pythonBin,
-                "-m",
-                "positron_stata_kernel",
-                "-f",
-                "{connection_file}"
-              ],
-              display_name: inst.displayName,
-              language: "stata",
-              interrupt_mode: "message",
-              kernel_protocol_version: "5.3",
-              env: envVars
-            }
-          }
-        };
+      for (let i = 0; i < stataInstalls.length; i++) {
+        const inst = stataInstalls[i];
+        const behavior = i === 0 ? positron.LanguageRuntimeStartupBehavior.Immediate : positron.LanguageRuntimeStartupBehavior.Implicit;
+        const metadata = this.buildRuntimeMetadata(inst, behavior);
         this._discoveredRuntimes.set(metadata.runtimeId, metadata);
         this._discoveredRuntimeCount++;
+        this._discoverEmitter.fire(metadata);
+        yield metadata;
       }
     } finally {
       this._discoveryComplete = true;
@@ -310,12 +318,55 @@ var StataRuntimeManager = class {
     }
   }
   async recommendedWorkspaceRuntime() {
-    for (const [id, meta] of this._discoveredRuntimes.entries()) {
-      if (id.startsWith("stata-")) {
-        return meta;
+    if (this._discoveredRuntimes.size === 0) {
+      const stataInstalls = findStataInstallations();
+      for (let i = 0; i < stataInstalls.length; i++) {
+        const inst = stataInstalls[i];
+        const behavior = i === 0 ? positron.LanguageRuntimeStartupBehavior.Immediate : positron.LanguageRuntimeStartupBehavior.Implicit;
+        const meta = this.buildRuntimeMetadata(inst, behavior);
+        this._discoveredRuntimes.set(meta.runtimeId, meta);
       }
     }
+    for (const meta of this._discoveredRuntimes.values()) {
+      return meta;
+    }
     return void 0;
+  }
+  async validateSession(sessionId) {
+    try {
+      const supervisorExt = vscode.extensions.getExtension("positron.positron-supervisor");
+      if (supervisorExt && supervisorExt.isActive) {
+        const supervisorApi = supervisorExt.exports;
+        if (supervisorApi && typeof supervisorApi.validateSession === "function") {
+          return await supervisorApi.validateSession(sessionId);
+        }
+      }
+    } catch {
+    }
+    return true;
+  }
+  async restoreSession(runtimeMetadata, sessionMetadata, dynState) {
+    const supervisorExt = vscode.extensions.getExtension("positron.positron-supervisor");
+    if (!supervisorExt) {
+      throw new Error("positron-supervisor extension is required to restore Stata sessions.");
+    }
+    if (!supervisorExt.isActive) {
+      await supervisorExt.activate();
+    }
+    const supervisorApi = supervisorExt.exports;
+    const initialDynState = dynState || {
+      sessionName: sessionMetadata.sessionName || runtimeMetadata.runtimeName || "Stata",
+      inputPrompt: ". ",
+      continuationPrompt: "> "
+    };
+    if (supervisorApi && typeof supervisorApi.restoreSession === "function") {
+      return await supervisorApi.restoreSession(
+        runtimeMetadata,
+        sessionMetadata,
+        initialDynState
+      );
+    }
+    return await this.createSession(runtimeMetadata, sessionMetadata);
   }
   async createSession(runtimeMetadata, sessionMetadata) {
     const supervisorExt = vscode.extensions.getExtension("positron.positron-supervisor");
@@ -511,6 +562,15 @@ function activate(context) {
   runtimeManager = new StataRuntimeManager(context);
   const runtimeRegistration = positron2.runtime.registerLanguageRuntimeManager("stata", runtimeManager);
   context.subscriptions.push(runtimeRegistration);
+  (async () => {
+    try {
+      for await (const runtime2 of runtimeManager.discoverAllRuntimes()) {
+        console.log(`Discovered Stata runtime: ${runtime2.runtimeName} (${runtime2.runtimeId})`);
+      }
+    } catch (err) {
+      console.error("Error during initial Stata runtime discovery:", err);
+    }
+  })();
   const dtaEditorRegistration = DtaCustomEditorProvider.register(context);
   context.subscriptions.push(dtaEditorRegistration);
   context.subscriptions.push(
