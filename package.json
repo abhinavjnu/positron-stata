@@ -42,8 +42,18 @@
     "languages": [
       {
         "id": "stata",
-        "aliases": ["Stata", "stata", "Do-file"],
-        "extensions": [".do", ".ado", ".mata", ".ihlp", ".hlp"],
+        "aliases": [
+          "Stata",
+          "stata",
+          "Do-file"
+        ],
+        "extensions": [
+          ".do",
+          ".ado",
+          ".mata",
+          ".ihlp",
+          ".hlp"
+        ],
         "configuration": "./language-configuration.json"
       }
     ],
@@ -70,7 +80,12 @@
         "positron-stata.stataEdition": {
           "type": "string",
           "default": "auto",
-          "enum": ["auto", "mp", "se", "be"],
+          "enum": [
+            "auto",
+            "mp",
+            "se",
+            "be"
+          ],
           "enumDescriptions": [
             "Automatically detect highest installed edition (MP > SE > BE)",
             "Stata/MP (Multi-Processing / Parallel Edition)",
@@ -176,6 +191,15 @@
   },
   "scripts": {
     "build": "node esbuild.js",
-    "watch": "node esbuild.js --watch"
+    "watch": "node esbuild.js --watch",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "npm run typecheck && node --test tests/discovery.test.ts"
+  },
+  "devDependencies": {
+    "@posit-dev/positron": "^0.2.10",
+    "@types/node": "^20.19.43",
+    "@types/vscode": "~1.90.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
   }
 }
