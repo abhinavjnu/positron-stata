@@ -62,8 +62,8 @@ test('Windows Python resolution falls back to the newest per-user install', () =
     const python = resolvePythonExecutable({
         platform: 'win32',
         env: { PATH: '', LOCALAPPDATA: 'C:\\Users\\u\\AppData\\Local' },
-        exists: existsIn([`${base}\\Python39\\python.exe`, `${base}\\Python312\\python.exe`, `${base}\\Python310\\python.exe`]),
-        listDir: dir => (norm(dir) === norm(base) ? ['Python39', 'Python312', 'Python310'] : [])
+        exists: existsIn([`${base}\\Python39\\python.exe`, `${base}\\Python314\\python.exe`, `${base}\\Python312\\python.exe`, `${base}\\Python310\\python.exe`]),
+        listDir: dir => (norm(dir) === norm(base) ? ['Python39', 'Python314', 'Python312', 'Python310'] : [])
     });
     assert.equal(norm(python), norm(`${base}\\Python312\\python.exe`));
 });
@@ -97,4 +97,30 @@ test('POSIX Python resolution searches PATH', () => {
         listDir: noDirs
     });
     assert.equal(python, '/opt/conda/bin/python3');
+});
+
+test('dedicated positron-stata venv is discovered', () => {
+    const python = resolvePythonExecutable({
+        platform: 'darwin',
+        env: { HOME: '/Users/test', PATH: '/usr/local/bin:/usr/bin' },
+        exists: existsIn([
+            '/Users/test/.local/share/positron-stata/venv/bin/python',
+            '/usr/local/bin/python3'
+        ]),
+        listDir: noDirs
+    });
+    assert.equal(python, '/Users/test/.local/share/positron-stata/venv/bin/python');
+});
+
+test('prefers version-specific python over generic python3 in PATH', () => {
+    const python = resolvePythonExecutable({
+        platform: 'darwin',
+        env: { PATH: '/usr/local/bin' },
+        exists: existsIn([
+            '/usr/local/bin/python3.12',
+            '/usr/local/bin/python3'
+        ]),
+        listDir: noDirs
+    });
+    assert.equal(python, '/usr/local/bin/python3.12');
 });

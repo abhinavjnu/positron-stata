@@ -198,8 +198,20 @@ function isWindowsAppsDir(dir) {
 }
 function newestPythonDirs(entries, pattern) {
   const version = (name) => {
-    const m = name.match(/(\d+)\D*(\d+)?/);
-    return m ? Number(m[1]) * 1e3 + Number(m[2] ?? 0) : 0;
+    const m = name.match(/(\d+)\.?(\d+)?/);
+    if (!m) return 0;
+    let major = 3;
+    let minor = 0;
+    if (m[2] !== void 0) {
+      major = Number(m[1]);
+      minor = Number(m[2]);
+    } else if (m[1].startsWith("3") && m[1].length > 1) {
+      major = 3;
+      minor = Number(m[1].slice(1));
+    } else {
+      minor = Number(m[1]);
+    }
+    return major === 3 && minor >= 14 ? -1 : major * 1e3 + minor;
   };
   return entries.filter((e) => pattern.test(e)).sort((a, b) => version(b) - version(a));
 }
@@ -209,6 +221,11 @@ function resolvePythonExecutable(opts) {
   const p = win ? path.win32 : path.posix;
   if (opts.configured && exists(opts.configured)) {
     return opts.configured;
+  }
+  const userHome = env2.HOME || env2.USERPROFILE || "";
+  if (userHome) {
+    const dedicatedVenv = win ? p.join(userHome, ".local", "share", "positron-stata", "venv", "Scripts", "python.exe") : p.join(userHome, ".local", "share", "positron-stata", "venv", "bin", "python");
+    if (exists(dedicatedVenv)) return dedicatedVenv;
   }
   const envRoots = [
     [env2.VIRTUAL_ENV, win ? ["Scripts", "python.exe"] : ["bin", "python3"]],
@@ -220,10 +237,10 @@ function resolvePythonExecutable(opts) {
     if (exists(candidate)) return candidate;
   }
   const pathDirs = (env2.PATH || env2.Path || "").split(win ? ";" : ":").filter(Boolean);
-  const names = win ? ["python.exe", "python3.exe"] : ["python3", "python"];
-  for (const dir of pathDirs) {
-    if (win && isWindowsAppsDir(dir)) continue;
-    for (const name of names) {
+  const names = win ? ["python.exe", "python3.exe"] : ["python3.13", "python3.12", "python3.11", "python3.10", "python3.9", "python3", "python"];
+  for (const name of names) {
+    for (const dir of pathDirs) {
+      if (win && isWindowsAppsDir(dir)) continue;
       const candidate = p.join(dir, name);
       if (exists(candidate)) return candidate;
     }
@@ -244,7 +261,17 @@ function resolvePythonExecutable(opts) {
     }
     return "python";
   }
-  for (const candidate of ["/home/linuxbrew/.linuxbrew/bin/python3", "/usr/local/bin/python3", "/opt/homebrew/bin/python3", "/usr/bin/python3"]) {
+  for (const candidate of [
+    "/opt/homebrew/bin/python3.13",
+    "/opt/homebrew/bin/python3.12",
+    "/opt/homebrew/bin/python3.11",
+    "/opt/homebrew/bin/python3.10",
+    "/opt/homebrew/bin/python3.9",
+    "/usr/bin/python3",
+    "/home/linuxbrew/.linuxbrew/bin/python3",
+    "/opt/homebrew/bin/python3",
+    "/usr/local/bin/python3"
+  ]) {
     if (exists(candidate)) return candidate;
   }
   return "python3";
@@ -353,6 +380,7 @@ var StataRuntimeManager = class {
         envVars["LD_LIBRARY_PATH"] = currentLd ? `${inst.homeDir}:${currentLd}` : inst.homeDir;
       }
     }
+    const launcherScript = path2.join(this.context.extensionPath, "kernel", "launcher.py");
     return {
       runtimeId,
       runtimeName: inst.displayName,
@@ -366,14 +394,13 @@ var StataRuntimeManager = class {
       base64EncodedIconSvg: void 0,
       startupBehavior,
       sessionLocation: positron.LanguageRuntimeSessionLocation.Workspace,
-      cacheable: true,
+      cacheable: false,
       extraRuntimeData: {
         engine: "stata",
         kernelSpec: {
           argv: [
             pythonBin,
-            "-m",
-            "positron_stata_kernel",
+            launcherScript,
             "-f",
             "{connection_file}"
           ],
