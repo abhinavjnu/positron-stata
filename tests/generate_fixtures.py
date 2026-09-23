@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
 generate_fixtures.py: Runs against a licensed Stata installation on this machine
-and records exact golden outputs, dataset metadata, macros, formats, and error strings
-into tests/fixtures/stata_golden.json.
+and records exact golden outputs, dataset metadata, macros, formats, error strings
+and graph-memory behaviour into tests/fixtures/stata_golden.json.
 
-This fixture allows unit tests on other machines (like Opus on work laptops without Stata)
-to run against 100% verified Stata ground truth.
+tests/test_engine_unit.py checks the engine and its stand-in PyStata against this
+fixture, so machines without Stata still test against real Stata results.
 """
 
 import json
@@ -16,6 +16,14 @@ repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(repo_root, "kernel"))
 
 from positron_stata_kernel.stata_engine import StataEngine
+
+
+def record_steps(engine, commands):
+    steps = []
+    for command in commands:
+        res = engine.execute(command)
+        steps.append({"command": command, "plots_count": len(res.plots), "error": res.error})
+    return steps
 
 
 def generate():
@@ -29,7 +37,8 @@ def generate():
     print(f"Connected to Stata ({engine.stata_home}, edition={engine.edition}).")
 
     golden_data = {
-        "stata_version": engine.stata_home,
+        "stata_version": engine._sfi.Macro.getGlobal("c(stata_version)"),
+        "stata_home": engine.stata_home,
         "edition": engine.edition,
         "runs": {},
     }
@@ -95,6 +104,42 @@ def generate():
         "command": "unrecognized_cmd_abc",
         "error": res6.error,
         "stdout": res6.stdout,
+    }
+
+    # 7. Named graphs must survive for graph combine, and must not be re-sent by later
+    #    commands that match the plot trigger but draw nothing.
+    print("Recording: graph combine scenario")
+    golden_data["runs"]["graph_combine"] = {"steps": record_steps(engine, [
+        "scatter price mpg, name(g1, replace)",
+        "scatter price weight, name(g2, replace)",
+        "graph combine g1 g2",
+        "generate line = 1",
+        "drop line",
+    ])}
+
+    # 8. Re-running the same unnamed plot shows it each time.
+    print("Recording: re-run of an unnamed plot")
+    golden_data["runs"]["rerun_default_plot"] = {"steps": record_steps(engine, [
+        "scatter price mpg",
+        "scatter price mpg",
+    ])}
+
+    # 9. Redrawing a named graph with new content shows the new version.
+    print("Recording: redraw of a named plot")
+    golden_data["runs"]["redraw_named_plot"] = {"steps": record_steps(engine, [
+        "scatter price mpg, name(g3, replace)",
+        "scatter price weight, name(g3, replace)",
+    ])}
+
+    # 10. r() results survive the graph housekeeping the kernel runs after a trigger command.
+    print("Recording: r() preservation")
+    engine.execute("summarize price")
+    engine.execute("generate line = 1")
+    after = engine.execute("display r(mean)")
+    engine.execute("drop line")
+    golden_data["runs"]["r_results_preserved"] = {
+        "display_r_mean": after.stdout.strip(),
+        "error": after.error,
     }
 
     with open(golden_file, "w", encoding="utf-8") as f:

@@ -193,7 +193,7 @@
     "build": "node esbuild.js",
     "watch": "node esbuild.js --watch",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "npm run typecheck && node --test tests/discovery.test.ts"
+    "test": "npm run typecheck && esbuild tests/discovery.test.ts --bundle --platform=node --format=cjs --log-level=warning --outfile=out/tests/discovery.test.js && node --test out/tests/discovery.test.js"
   },
   "devDependencies": {
     "@posit-dev/positron": "^0.2.10",
