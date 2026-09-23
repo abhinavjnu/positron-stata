@@ -57,13 +57,15 @@ export function activate(context: vscode.ExtensionContext) {
                 fs.writeFileSync(tempFile, editor.document.getText(), 'utf8');
                 filePath = tempFile.replace(/\\/g, '/');
             } else {
-                if (editor.document.isDirty) {
-                    await editor.document.save();
+                if (editor.document.isDirty && !(await editor.document.save())) {
+                    vscode.window.showWarningMessage('Save the do-file before running it.');
+                    return;
                 }
                 filePath = editor.document.uri.fsPath.replace(/\\/g, '/');
             }
 
-            const doCmd = `do "${filePath}"\n`;
+            // Compound quotes let the path itself contain double quotes.
+            const doCmd = `do \`"${filePath}"'\n`;
             await positron.runtime.executeCode('stata', doCmd, true, true);
         })
     );

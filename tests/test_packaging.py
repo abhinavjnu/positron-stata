@@ -5,13 +5,16 @@ and asset bundling for Open VSX publication.
 """
 
 import os
+import sys
 import json
 import zipfile
 import xml.etree.ElementTree as ET
 import unittest
 
 repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-vsix_path = os.path.join(repo_root, "positron-stata-0.1.0.vsix")
+with open(os.path.join(repo_root, "package.json"), encoding="utf-8") as _f:
+    package_version = json.load(_f)["version"]
+vsix_path = os.path.join(repo_root, f"positron-stata-{package_version}.vsix")
 
 class TestPackaging(unittest.TestCase):
     @classmethod
@@ -19,7 +22,7 @@ class TestPackaging(unittest.TestCase):
         # Run package_vsix.py to ensure fresh build
         import subprocess
         print(f"\n--- Running package_vsix.py ---")
-        subprocess.run(["python3", os.path.join(repo_root, "package_vsix.py")], check=True, cwd=repo_root)
+        subprocess.run([sys.executable, os.path.join(repo_root, "package_vsix.py")], check=True, cwd=repo_root)
 
     def test_vsix_exists(self):
         self.assertTrue(os.path.exists(vsix_path), "VSIX file must exist")
@@ -64,7 +67,7 @@ class TestPackaging(unittest.TestCase):
         with zipfile.ZipFile(vsix_path, "r") as zf:
             pkg_data = json.loads(zf.read("extension/package.json").decode("utf-8"))
             self.assertEqual(pkg_data["name"], "positron-stata")
-            self.assertEqual(pkg_data["version"], "0.1.0")
+            self.assertEqual(pkg_data["version"], package_version)
             self.assertIn("icon", pkg_data)
             self.assertEqual(pkg_data["icon"], "icon.png")
             self.assertIn("repository", pkg_data)

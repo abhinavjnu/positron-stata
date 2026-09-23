@@ -36,8 +36,10 @@ class StataVariablesHandler:
         elif isinstance(request, ViewRequest):
             self._perform_view_action(request.params.path)
         else:
-            # Send empty result for other unsupported requests
-            self._send_result({})
+            self._send_error(
+                JsonRpcErrorCode.METHOD_NOT_FOUND,
+                f"{type(request).__name__} is not supported by the Stata kernel",
+            )
 
     def _get_variables(self) -> List[Variable]:
         variables = []
@@ -98,29 +100,31 @@ class StataVariablesHandler:
             var_names = info.get("var_names", [])
             var_labels = info.get("var_labels", {})
             var_types = info.get("var_types", {})
+            var_formats = info.get("var_formats", {})
+            var_value_labels = info.get("var_value_labels", {})
 
             children = []
             for name in var_names:
-                vtype = var_types.get(name, "")
+                vtype = var_types.get(name, "") or "var"
                 vlabel = var_labels.get(name, "")
-                
-                # Determine display kind
-                kind = VariableKind.Number
-                if "str" in vtype:
-                    kind = VariableKind.String
-                
+                vformat = var_formats.get(name, "")
+                value_label = var_value_labels.get(name, "")
+
+                kind = VariableKind.String if "str" in vtype else VariableKind.Number
+                details = [vtype] + [d for d in (vformat, f"value label: {value_label}" if value_label else "") if d]
+
                 child = Variable(
                     access_key=name,
                     display_name=name,
-                    display_type=vtype or "var",
-                    display_value=vlabel if vlabel else f"Variable {name}",
+                    display_type=vtype,
+                    display_value=vlabel or vformat,
                     has_children=False,
                     has_viewer=False,
                     is_truncated=False,
                     kind=kind,
                     length=info.get("obs", 0),
                     size=0,
-                    type_info=f"{vtype}: {vlabel}" if vlabel else (vtype or "var"),
+                    type_info=", ".join(details),
                     updated_time=int(time.time() * 1000),
                 )
                 children.append(child)

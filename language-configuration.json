@@ -23,6 +23,10 @@
     ["\"", "\""],
     ["`", "'"]
   ],
+  "indentationRules": {
+    "increaseIndentPattern": "^.*\\{\\s*(//.*)?$",
+    "decreaseIndentPattern": "^\\s*\\}"
+  },
   "folding": {
     "markers": {
       "start": "^\\s*//\\s*#?region\\b",

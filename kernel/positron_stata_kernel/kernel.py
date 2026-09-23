@@ -17,6 +17,7 @@ import comm
 from positron.data_explorer import DataExplorerService
 from positron.utils import BackgroundJobQueue
 
+from . import completeness
 from .stata_engine import StataEngine
 from .variables_handler import StataVariablesHandler
 from .ui_handler import StataUiHandler
@@ -26,10 +27,10 @@ class PositronStataKernel(Kernel):
     implementation = "positron_stata"
     implementation_version = "0.1.0"
     language = "stata"
-    language_version = "19.5"
+    language_version = os.environ.get("STATA_VERSION", "19")
     language_info = {
         "name": "stata",
-        "version": "19.5",
+        "version": os.environ.get("STATA_VERSION", "19"),
         "mimetype": "text/x-stata",
         "file_extension": ".do",
         "pygments_lexer": "stata",
@@ -77,38 +78,25 @@ class PositronStataKernel(Kernel):
         self.comm_manager.register_target("positron.plot", lambda comm, msg: None)
 
     async def do_is_complete(self, code: str):
-        clean = code.strip()
-        if not clean:
-            return {"status": "complete", "indent": ""}
-        lines = [line.strip() for line in clean.splitlines() if line.strip()]
-        if lines and lines[-1].endswith("///"):
-            return {"status": "incomplete", "indent": "    "}
-        if "/*" in clean and "*/" not in clean.rsplit("/*", 1)[-1]:
-            return {"status": "incomplete", "indent": "    "}
-        return {"status": "complete", "indent": ""}
+        return completeness.check(code)
 
     def do_execute(self, code, silent, store_history=True, user_expressions=None, allow_stdin=False):
         code_trimmed = code.strip()
         if not code_trimmed:
-            return {
-                "status": "ok",
-                "execution_count": self.execution_count,
-                "payload": [],
-                "user_expressions": {},
-            }
+            return self._ok_reply()
 
+        if code_trimmed.lower().startswith("help ") and "\n" not in code_trimmed:
+            self.help_handler.show_help(code_trimmed.split(maxsplit=1)[1].strip())
+            return self._ok_reply()
 
-        # Handle help commands directly
-        if code_trimmed.lower().startswith("help "):
-            topic = code_trimmed.split(maxsplit=1)[1].strip()
-            self.help_handler.show_help(topic)
-
-        # Stream callbacks
         stdout_cb = (lambda text: self._send_stdout(text)) if not silent else None
         stderr_cb = (lambda text: self._send_stderr(text)) if not silent else None
 
-        # Execute code in active engine with live streaming
-        res = self.engine.execute(code, stdout_callback=stdout_cb, stderr_callback=stderr_cb)
+        try:
+            res = self.engine.execute(code, stdout_callback=stdout_cb, stderr_callback=stderr_cb)
+        except Exception as e:
+            # Typically PyStata failing to initialise (bad STATA_HOME, licence, Python bitness).
+            return self._error_reply(str(e), silent)
 
         # Send plots (displays in Positron's Plots tab)
         if res.plots and not silent:
@@ -130,12 +118,26 @@ class PositronStataKernel(Kernel):
         if res.request_open_data_explorer:
             self.open_data_explorer_for_current_dataset()
 
+        self.ui_handler.poll_working_directory()
+
+        if res.error:
+            return self._error_reply(res.error, silent)
+        return self._ok_reply()
+
+    def _ok_reply(self):
         return {
             "status": "ok",
             "execution_count": self.execution_count,
             "payload": [],
             "user_expressions": {},
         }
+
+    def _error_reply(self, message: str, silent: bool):
+        # An empty ename makes Positron show Stata's message verbatim ("name: message" otherwise).
+        content = {"ename": "", "evalue": message.rstrip("\n"), "traceback": []}
+        if not silent:
+            self.send_response(self.iopub_socket, "error", content)
+        return {"status": "error", "execution_count": self.execution_count, **content}
 
     def open_data_explorer_for_current_dataset(self) -> Optional[str]:
         """Convert in-memory Stata data to DataFrame and register with Positron Data Explorer."""

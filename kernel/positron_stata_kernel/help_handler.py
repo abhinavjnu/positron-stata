@@ -44,7 +44,7 @@ class StataHelpHandler:
             return
         try:
             res = self.kernel.engine.execute(f"help {topic}")
-            content = res.stdout if res.stdout else f"No Stata help found for topic: {topic}"
+            content = res.stdout or res.error or f"No Stata help found for topic: {topic}"
             markdown = f"## Stata Help: `{topic}`\n\n```stata\n{content}\n```"
             if self._comm is not None:
                 event = ShowHelpParams(
