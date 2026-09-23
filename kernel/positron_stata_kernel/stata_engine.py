@@ -10,14 +10,34 @@ import sys
 import tempfile
 from typing import Any, Dict, List, Optional, Tuple
 
+_PLOT_TRIGGER = re.compile(
+    r"\b(graph|twoway|tw|scatter|line|connected|histogram|hist|kdensity|lowess|lpoly|"
+    r"marginsplot|coefplot|binscatter|binsreg|bar|hbar|box|hbox|pie|qnorm|pnorm|qqplot|"
+    r"ac|pac|xcorr|tsline|tsrline|xtline|rvfplot|rvpplot|avplot|avplots|cprplot|acprplot|"
+    r"lvr2plot|stcurve|heatplot|spmap|grmap|event_plot|rdplot|"
+    # Graphs drawn inside do-files or included scripts.
+    r"do|run|include)\b",
+    re.IGNORECASE,
+)
+
+
 class ExecutionResult:
-    def __init__(self, stdout: str, stderr: str = "", plots: Optional[List[str]] = None, 
-                 dataset_changed: bool = False, request_open_data_explorer: bool = False):
+    def __init__(self, stdout: str, stderr: str = "", plots: Optional[List[str]] = None,
+                 dataset_changed: bool = False, request_open_data_explorer: bool = False,
+                 error: Optional[str] = None):
         self.stdout = stdout
         self.stderr = stderr
         self.plots = plots or []
         self.dataset_changed = dataset_changed
         self.request_open_data_explorer = request_open_data_explorer
+        self.error = error
+
+
+def _optional(getter) -> str:
+    try:
+        return getter() or ""
+    except Exception:
+        return ""
 
 
 class _StreamInterceptor:
@@ -49,11 +69,7 @@ class StataEngine:
         self._initialized = False
         self._stata = None
         self._sfi = None
-        self._last_obs = -1
-        self._last_vars = -1
-        self._last_file = ""
-        self._last_changed = "0"
-        self._last_plot_counter = 0
+        self._last_signature: Optional[Tuple] = None
 
     def initialize(self):
         if self._initialized:
@@ -114,14 +130,12 @@ class StataEngine:
         sys.stdout = capture_out
         sys.stderr = capture_err
 
+        error = None
         try:
-            # Execute command in Stata
             self._stata.run(code)
         except Exception as e:
-            err_msg = str(e)
-            if not err_msg.endswith("\n"):
-                err_msg += "\n"
-            capture_err.write(err_msg)
+            # PyStata raises on a non-zero Stata return code; the message ends with "r(###);".
+            error = str(e).rstrip("\n") or f"{type(e).__name__} raised while running Stata code"
         finally:
             sys.stdout = old_stdout
             sys.stderr = old_stderr
@@ -140,18 +154,14 @@ class StataEngine:
             stderr=stderr_str,
             plots=plots,
             dataset_changed=dataset_changed,
-            request_open_data_explorer=request_open_data_explorer
+            request_open_data_explorer=request_open_data_explorer,
+            error=error,
         )
 
     def _check_and_export_plots(self, executed_code: str) -> List[str]:
         """Detect and export any newly generated Stata graphs to SVG."""
         plots = []
-        # Commands likely to produce graphics (word boundary match)
-        plot_pattern = re.compile(
-            r'\b(graph|scatter|twoway|histogram|hist|kdensity|marginsplot|coefplot|line|bar|box|pie|qnorm|pnorm|ac|pac|xcorr|binscatter)\b',
-            re.IGNORECASE
-        )
-        if not plot_pattern.search(executed_code):
+        if not _PLOT_TRIGGER.search(executed_code):
             return plots
 
         tmp = None
@@ -159,8 +169,9 @@ class StataEngine:
             with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as tf:
                 tmp = tf.name
 
-            # Export the currently active Stata graph to SVG
-            self._stata.run(f'qui graph export "{tmp}", as(svg) replace')
+            # Forward slashes: Stata treats a backslash before ` or $ as an escape.
+            stata_path = tmp.replace("\\", "/")
+            self._stata.run(f'qui graph export "{stata_path}", as(svg) replace')
             if os.path.exists(tmp) and os.path.getsize(tmp) > 500:
                 with open(tmp, "r", encoding="utf-8", errors="replace") as f:
                     svg_content = f.read()
@@ -182,27 +193,26 @@ class StataEngine:
 
         return plots
 
-    def _check_dataset_changed(self) -> bool:
-        """Check if observation count, variable count, filename, or c(changed) changed."""
-        try:
-            obs = self._sfi.Data.getObsTotal()
-            vars_cnt = self._sfi.Data.getVarCount()
-            filename = self._sfi.Macro.getGlobal("c(filename)") or ""
-            changed_flag = self._sfi.Macro.getGlobal("c(changed)") or "0"
+    def _dataset_signature(self) -> Tuple:
+        data = self._sfi.Data
+        n = data.getVarCount()
+        return (
+            data.getObsTotal(),
+            n,
+            self._sfi.Macro.getGlobal("c(filename)") or "",
+            self._sfi.Macro.getGlobal("c(changed)") or "0",
+            # Names, types and labels, so rename/recast/label var refresh the Variables pane.
+            tuple((data.getVarName(i), data.getVarType(i), data.getVarLabel(i)) for i in range(n)),
+        )
 
-            changed = (
-                obs != self._last_obs or 
-                vars_cnt != self._last_vars or 
-                filename != self._last_file or
-                (changed_flag == "1" and self._last_changed != "1")
-            )
-            self._last_obs = obs
-            self._last_vars = vars_cnt
-            self._last_file = filename
-            self._last_changed = changed_flag
-            return changed
+    def _check_dataset_changed(self) -> bool:
+        try:
+            signature = self._dataset_signature()
         except Exception:
             return False
+        changed = signature != self._last_signature
+        self._last_signature = signature
+        return changed
 
     def get_current_dataset_info(self) -> Dict[str, Any]:
         """Retrieve metadata of the dataset currently in Stata memory."""
@@ -215,9 +225,16 @@ class StataEngine:
             filepath = self._sfi.Macro.getGlobal("c(filename)") or ""
             name = os.path.basename(filepath) if filepath else "Untitled Dataset"
             
-            var_names = [self._sfi.Data.getVarName(i) for i in range(var_count)]
-            var_labels = {self._sfi.Data.getVarName(i): self._sfi.Data.getVarLabel(i) for i in range(var_count)}
-            var_types = {self._sfi.Data.getVarName(i): self._sfi.Data.getVarType(i) for i in range(var_count)}
+            data = self._sfi.Data
+            value_label_api = getattr(self._sfi, "ValueLabel", None)
+            var_names, var_labels, var_types, var_formats, var_value_labels = [], {}, {}, {}, {}
+            for i in range(var_count):
+                var = data.getVarName(i)
+                var_names.append(var)
+                var_labels[var] = data.getVarLabel(i)
+                var_types[var] = data.getVarType(i)
+                var_formats[var] = _optional(lambda: data.getVarFormat(i))
+                var_value_labels[var] = _optional(lambda: value_label_api.getVarValueLabel(i)) if value_label_api else ""
 
             return {
                 "obs": obs,
@@ -226,7 +243,9 @@ class StataEngine:
                 "filepath": filepath,
                 "var_names": var_names,
                 "var_labels": var_labels,
-                "var_types": var_types
+                "var_types": var_types,
+                "var_formats": var_formats,
+                "var_value_labels": var_value_labels,
             }
         except Exception:
             return {"obs": 0, "vars": 0, "name": "empty", "var_names": []}

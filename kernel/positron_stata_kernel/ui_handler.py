@@ -49,7 +49,10 @@ class StataUiHandler:
             code = request.params.code
             res = self.kernel.engine.execute(code)
             if self._comm is not None:
-                self._comm.send_result(data={"result": res.stdout, "output": res.stdout})
+                if res.error:
+                    self._comm.send_error(JsonRpcErrorCode.INTERNAL_ERROR, res.error)
+                else:
+                    self._comm.send_result(data={"result": res.stdout, "output": res.stdout})
 
         elif isinstance(request, DidChangePlotsRenderSettingsEvent):
             # Positron notifying plot render setting changes
