@@ -15,17 +15,25 @@ First-class Stata development environment for **[Positron IDE](https://github.co
 
 ---
 
-## 📸 Screenshots
+## 📸 Experience Positron IDE with Stata
 
-### Interactive Console & Live Variables
-Execute Stata code interactively with real-time output, formatted tables, and live CPU/memory monitoring. In-memory datasets automatically populate Positron's **Variables** pane.
+Positron IDE brings modern data science ergonomics to Stata users. Stata acts as the high-performance analytical engine, while Positron delivers first-class interactive exploration tools:
 
-![Interactive Stata Execution in Positron](https://raw.githubusercontent.com/abhinavjnu/positron-stata/main/resources/positron_stata_execution.png)
+### Interactive Data Explorer & Column Profiling
+Inspect datasets in Positron's spreadsheet viewer with in-column summary distribution histograms, data type profiling, sorting, and search. Double-click `.dta` files or type `browse` in your script.
 
-### Do-File Editor & Execution Controls
-Full syntax highlighting for `.do`, `.ado`, and `.mata` files with smart bracket matching, comment toggling, and one-click execution shortcuts.
+![Positron Data Explorer with Stata Dataset](https://raw.githubusercontent.com/abhinavjnu/positron-stata/main/resources/positron_stata_data_explorer.png)
 
-![Do-File Editor in Positron](https://raw.githubusercontent.com/abhinavjnu/positron-stata/main/resources/positron_stata_dofile.png)
+### Vector Plots & Live Variables Pane
+Stata graphs (`scatter`, `twoway`, `histogram`, `marginsplot`, etc.) automatically render into Positron's interactive **Plots** pane with zoom and history. In-memory data is continuously tracked in the **Variables** pane with storage types and value labels.
+
+![Positron Visualizations & Plots Pane](https://raw.githubusercontent.com/abhinavjnu/positron-stata/main/resources/positron_stata_visualizations.png)
+
+---
+
+## 🧪 Public Demo Workspace
+
+Explore full working examples, sample do-files, and famous public datasets (`nlsw88.dta`, `census.dta`, `penguins.dta`) in the **[Stata Positron Demo Repository](https://github.com/abhinavjnu/stata-positron-demo)**.
 
 ---
 
@@ -70,10 +78,10 @@ Full syntax highlighting for `.do`, `.ado`, and `.mata` files with smart bracket
 3. Search for `positron-stata` and click **Install**.
 
 ### From `.vsix` Package
-Download the latest `positron-stata-0.1.2.vsix` from [Releases](https://github.com/abhinavjnu/positron-stata/releases) and run:
+Download the latest `positron-stata-0.1.3.vsix` from [Releases](https://github.com/abhinavjnu/positron-stata/releases) and run:
 
 ```bash
-positron --install-extension positron-stata-0.1.2.vsix
+positron --install-extension positron-stata-0.1.3.vsix
 ```
 
 Or open Positron, press `Ctrl+Shift+P` (`Cmd+Shift+P`), and run **Extensions: Install from VSIX...**.

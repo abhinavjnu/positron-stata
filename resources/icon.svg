@@ -1,50 +1,55 @@
 <svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="positronBg" x1="0" y1="0" x2="0" y2="512" gradientUnits="userSpaceOnUse">
+    <linearGradient id="stataBg6" x1="0" y1="0" x2="0" y2="512" gradientUnits="userSpaceOnUse">
       <stop offset="0%" stop-color="#4287c4"/>
-      <stop offset="100%" stop-color="#276399"/>
+      <stop offset="100%" stop-color="#1e5b92"/>
     </linearGradient>
-    <linearGradient id="stataCobalt" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#1864ab"/>
-      <stop offset="100%" stop-color="#0e4a82"/>
+    <linearGradient id="posBg6" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#165082"/>
+      <stop offset="100%" stop-color="#0b2f50"/>
     </linearGradient>
-    <radialGradient id="redDot" cx="35%" cy="35%" r="65%">
+    <linearGradient id="tileGrad6" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#edf2f7"/>
+    </linearGradient>
+    <radialGradient id="redDot6" cx="35%" cy="35%" r="65%">
       <stop offset="0%" stop-color="#ff4d6d"/>
       <stop offset="70%" stop-color="#e11d48"/>
       <stop offset="100%" stop-color="#9f1239"/>
     </radialGradient>
-    <filter id="dropShadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#0d2b45" flood-opacity="0.55"/>
+    <filter id="drop6" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#092138" flood-opacity="0.45"/>
     </filter>
-    <filter id="tileDrop" x="-30%" y="-30%" width="160%" height="160%">
-      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#081e33" flood-opacity="0.45"/>
+    <filter id="tileInner6" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#061a2d" flood-opacity="0.4"/>
     </filter>
   </defs>
 
-  <!-- Official Positron squircle proportion -->
-  <rect x="16" y="16" width="480" height="480" rx="116" fill="url(#positronBg)"/>
+  <!-- Big Stata Squircle Frame -->
+  <rect x="16" y="16" width="480" height="480" rx="116" fill="url(#stataBg6)"/>
 
-  <g transform="translate(54, 54) scale(0.92)" filter="url(#dropShadow)">
-    <!-- Official Positron P Silhouette in pure white -->
-    <path d="M83.6,373.6v-178.6c0-63,52.4-143.7,142.7-143.7s144.1,69.7,144.1,141.1c0,122.6-116.6,143.1-116.6,143.1,0,0,7.2-11.5,7.2-29.5s-8-28-8-28c0,0,60-16,60-87s-53-83-86-83c-57,0-88.3,48.5-88.3,84.3v181.9c0,25.9-17.5,23.9-17.5,23.9h-19.2s-18.4,0-18.4-24.4Z" fill="#ffffff"/>
+  <g filter="url(#drop6)">
+    <!-- Row 1: Col 2, Col 3 -->
+    <rect x="202" y="76" width="108" height="108" rx="24" fill="url(#tileGrad6)"/>
+    <rect x="328" y="76" width="108" height="108" rx="24" fill="url(#tileGrad6)"/>
 
-    <!-- Stata Cobalt Blue Badge inside P loop -->
-    <g filter="url(#tileDrop)">
-      <rect x="178" y="102" width="124" height="124" rx="24" fill="url(#stataCobalt)" stroke="rgba(255,255,255,0.4)" stroke-width="2"/>
-
-      <!-- Stata 7 Pure White Blocks forming the iconic matrix S -->
-      <rect x="228.5" y="123" width="23" height="23" rx="4.5" fill="#ffffff"/>
-      <rect x="258" y="123" width="23" height="23" rx="4.5" fill="#ffffff"/>
-
-      <rect x="199" y="152.5" width="23" height="23" rx="4.5" fill="#ffffff"/>
-      <rect x="228.5" y="152.5" width="23" height="23" rx="4.5" fill="#ffffff"/>
-      <rect x="258" y="152.5" width="23" height="23" rx="4.5" fill="#ffffff"/>
-
-      <rect x="199" y="182" width="23" height="23" rx="4.5" fill="#ffffff"/>
-      <rect x="228.5" y="182" width="23" height="23" rx="4.5" fill="#ffffff"/>
+    <!-- Row 2: Col 1, Col 2 (Center Positron Tile), Col 3 -->
+    <rect x="76" y="202" width="108" height="108" rx="24" fill="url(#tileGrad6)"/>
+    
+    <!-- Center Tile: Distinct Positron Inset Badge with white rim -->
+    <g filter="url(#tileInner6)">
+      <rect x="202" y="202" width="108" height="108" rx="24" fill="url(#posBg6)" stroke="#ffffff" stroke-width="3.5"/>
+      <!-- Centered Positron P Silhouette with proper padding -->
+      <g transform="translate(214, 212) scale(0.245)">
+        <path d="M83.6,373.6v-178.6c0-63,52.4-143.7,142.7-143.7s144.1,69.7,144.1,141.1c0,122.6-116.6,143.1-116.6,143.1,0,0,7.2-11.5,7.2-29.5s-8-28-8-28c0,0,60-16,60-87s-53-83-86-83c-57,0-88.3,48.5-88.3,84.3v181.9c0,25.9-17.5,23.9-17.5,23.9h-19.2s-18.4,0-18.4-24.4Z" fill="#ffffff"/>
+        <circle cx="204.9" cy="306.6" r="42" fill="url(#redDot6)" stroke="#ffffff" stroke-width="4"/>
+      </g>
     </g>
 
-    <!-- Stata Crimson Sphere as Positron's Focus Particle -->
-    <circle cx="204.9" cy="306.6" r="42" fill="url(#redDot)" stroke="#ffffff" stroke-width="4"/>
+    <rect x="328" y="202" width="108" height="108" rx="24" fill="url(#tileGrad6)"/>
+
+    <!-- Row 3: Col 1, Col 2 -->
+    <rect x="76" y="328" width="108" height="108" rx="24" fill="url(#tileGrad6)"/>
+    <rect x="202" y="328" width="108" height="108" rx="24" fill="url(#tileGrad6)"/>
   </g>
 </svg>

@@ -25,7 +25,7 @@ from .help_handler import StataHelpHandler
 
 class PositronStataKernel(Kernel):
     implementation = "positron_stata"
-    implementation_version = "0.1.2"
+    implementation_version = "0.1.3"
     language = "stata"
     language_version = os.environ.get("STATA_VERSION", "19")
     language_info = {
