@@ -210,6 +210,11 @@ function resolvePythonExecutable(opts) {
   if (opts.configured && exists(opts.configured)) {
     return opts.configured;
   }
+  const userHome = env2.HOME || env2.USERPROFILE || "";
+  if (userHome) {
+    const dedicatedVenv = win ? p.join(userHome, ".local", "share", "positron-stata", "venv", "Scripts", "python.exe") : p.join(userHome, ".local", "share", "positron-stata", "venv", "bin", "python");
+    if (exists(dedicatedVenv)) return dedicatedVenv;
+  }
   const envRoots = [
     [env2.VIRTUAL_ENV, win ? ["Scripts", "python.exe"] : ["bin", "python3"]],
     [env2.CONDA_PREFIX, win ? ["python.exe"] : ["bin", "python3"]]
@@ -219,16 +224,11 @@ function resolvePythonExecutable(opts) {
     const candidate = p.join(root, ...rel);
     if (exists(candidate)) return candidate;
   }
-  const userHome = env2.HOME || env2.USERPROFILE || "";
-  if (userHome) {
-    const dedicatedVenv = win ? p.join(userHome, ".local", "share", "positron-stata", "venv", "Scripts", "python.exe") : p.join(userHome, ".local", "share", "positron-stata", "venv", "bin", "python");
-    if (exists(dedicatedVenv)) return dedicatedVenv;
-  }
   const pathDirs = (env2.PATH || env2.Path || "").split(win ? ";" : ":").filter(Boolean);
   const names = win ? ["python.exe", "python3.exe"] : ["python3.13", "python3.12", "python3.11", "python3.10", "python3.9", "python3", "python"];
-  for (const dir of pathDirs) {
-    if (win && isWindowsAppsDir(dir)) continue;
-    for (const name of names) {
+  for (const name of names) {
+    for (const dir of pathDirs) {
+      if (win && isWindowsAppsDir(dir)) continue;
       const candidate = p.join(dir, name);
       if (exists(candidate)) return candidate;
     }
@@ -368,6 +368,7 @@ var StataRuntimeManager = class {
         envVars["LD_LIBRARY_PATH"] = currentLd ? `${inst.homeDir}:${currentLd}` : inst.homeDir;
       }
     }
+    const launcherScript = path2.join(this.context.extensionPath, "kernel", "launcher.py");
     return {
       runtimeId,
       runtimeName: inst.displayName,
@@ -381,14 +382,13 @@ var StataRuntimeManager = class {
       base64EncodedIconSvg: void 0,
       startupBehavior,
       sessionLocation: positron.LanguageRuntimeSessionLocation.Workspace,
-      cacheable: true,
+      cacheable: false,
       extraRuntimeData: {
         engine: "stata",
         kernelSpec: {
           argv: [
             pythonBin,
-            "-m",
-            "positron_stata_kernel",
+            launcherScript,
             "-f",
             "{connection_file}"
           ],

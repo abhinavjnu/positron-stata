@@ -137,6 +137,8 @@ export class StataRuntimeManager implements positron.LanguageRuntimeManager {
             }
         }
 
+        const launcherScript = path.join(this.context.extensionPath, 'kernel', 'launcher.py');
+
         return {
             runtimeId,
             runtimeName: inst.displayName,
@@ -150,14 +152,13 @@ export class StataRuntimeManager implements positron.LanguageRuntimeManager {
             base64EncodedIconSvg: undefined,
             startupBehavior: startupBehavior,
             sessionLocation: positron.LanguageRuntimeSessionLocation.Workspace,
-            cacheable: true,
+            cacheable: false,
             extraRuntimeData: {
                 engine: 'stata',
                 kernelSpec: {
                     argv: [
                         pythonBin,
-                        '-m',
-                        'positron_stata_kernel',
+                        launcherScript,
                         '-f',
                         '{connection_file}'
                     ],

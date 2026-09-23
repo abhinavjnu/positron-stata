@@ -199,6 +199,14 @@ export function resolvePythonExecutable(opts: PythonResolveOptions): string {
         return opts.configured;
     }
 
+    const userHome = env.HOME || env.USERPROFILE || '';
+    if (userHome) {
+        const dedicatedVenv = win
+            ? p.join(userHome, '.local', 'share', 'positron-stata', 'venv', 'Scripts', 'python.exe')
+            : p.join(userHome, '.local', 'share', 'positron-stata', 'venv', 'bin', 'python');
+        if (exists(dedicatedVenv)) return dedicatedVenv;
+    }
+
     const envRoots: [string | undefined, string[]][] = [
         [env.VIRTUAL_ENV, win ? ['Scripts', 'python.exe'] : ['bin', 'python3']],
         [env.CONDA_PREFIX, win ? ['python.exe'] : ['bin', 'python3']]
@@ -209,21 +217,13 @@ export function resolvePythonExecutable(opts: PythonResolveOptions): string {
         if (exists(candidate)) return candidate;
     }
 
-    const userHome = env.HOME || env.USERPROFILE || '';
-    if (userHome) {
-        const dedicatedVenv = win
-            ? p.join(userHome, '.local', 'share', 'positron-stata', 'venv', 'Scripts', 'python.exe')
-            : p.join(userHome, '.local', 'share', 'positron-stata', 'venv', 'bin', 'python');
-        if (exists(dedicatedVenv)) return dedicatedVenv;
-    }
-
     const pathDirs = (env.PATH || env.Path || '').split(win ? ';' : ':').filter(Boolean);
     const names = win
         ? ['python.exe', 'python3.exe']
         : ['python3.13', 'python3.12', 'python3.11', 'python3.10', 'python3.9', 'python3', 'python'];
-    for (const dir of pathDirs) {
-        if (win && isWindowsAppsDir(dir)) continue;
-        for (const name of names) {
+    for (const name of names) {
+        for (const dir of pathDirs) {
+            if (win && isWindowsAppsDir(dir)) continue;
             const candidate = p.join(dir, name);
             if (exists(candidate)) return candidate;
         }
