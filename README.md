@@ -3,7 +3,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Open VSX](https://img.shields.io/badge/Open%20VSX-positron--stata-purple)](https://open-vsx.org/extension/abhinavjnu/positron-stata)
 
-First-class Stata language runtime and interactive development environment for **Positron IDE** (and VS Code) with native **Variables Pane**, **Data Explorer**, **Plots Pane**, and standalone **`.dta` dataset inspection**.
+First-class Stata language runtime and interactive development environment for **Positron IDE** with native **Variables Pane**, **Data Explorer**, **Plots Pane**, and standalone **`.dta` dataset inspection**.
+
+> The extension relies on Positron's runtime and supervisor APIs, so it does not run in plain VS Code.
 
 ---
 
@@ -12,6 +14,8 @@ First-class Stata language runtime and interactive development environment for *
 - **Native Stata Runtime in Positron**:
   - Direct, in-process execution via PyStata and SFI using your existing licensed Stata installation (Stata 17, 18, or 19; MP, SE, or BE).
   - Cross-platform auto-discovery on **macOS**, **Windows**, and **Linux**.
+  - Starts automatically in workspaces that contain `.do`, `.ado` or `.dta` files; elsewhere it starts when you open a Stata file or pick it in the interpreter selector.
+  - Stata errors are reported as console errors, so notebooks and multi-statement runs stop at the failing command.
 - **Interactive Variables Pane**:
   - In-memory datasets automatically surface in Positron's **Variables** tab.
   - Expand datasets to view variable names, types, formats, value labels, and variable descriptions in real time.
@@ -34,8 +38,14 @@ First-class Stata language runtime and interactive development environment for *
 ## üìã Prerequisites
 
 1. **Positron IDE**: Download from [Positron Releases](https://github.com/posit-dev/positron/releases).
-2. **Stata**: Any licensed installation of Stata 17, 18, or 19 (MP, SE, or BE / IC).
-3. **Python**: Python 3.9+ with `pystata` configured (standard with Stata 17+ in `<stata>/utilities`).
+2. **Stata**: Any licensed installation of Stata 17, 18, or 19 (MP, SE, or BE).
+3. **Python**: 64-bit Python 3.9+. PyStata itself is loaded from `<stata>/utilities`, but the kernel needs these packages in the same interpreter:
+
+   ```bash
+   python -m pip install ipykernel pandas numpy pyarrow
+   ```
+
+   `pyarrow` is only needed to open `.dta` files from the File Explorer. On Windows, if several Pythons are installed, set `positron-stata.pythonPath` to the one you installed these packages into.
 
 ---
 
@@ -78,6 +88,8 @@ Open your Positron Settings (`Ctrl+,` or `Cmd+,`) and navigate to **Extensions ‚
 - **macOS**: `/Applications/StataNow 19`, `/Applications/Stata 19`, `/Applications/Stata 18`, `/Applications/Stata*`
 - **Windows**: `C:\Program Files\StataNow19`, `C:\Program Files\Stata19`, `C:\Program Files\Stata18`, `C:\Program Files\Stata*`
 
+If `positron-stata.pythonPath` is blank, the kernel uses the active virtualenv or conda environment, then the first `python` on `PATH`. On Windows the Microsoft Store `python3` alias is skipped, because it cannot start Python unless the Store package is installed.
+
 ---
 
 ## üõ†Ô∏è Development & Building from Source
@@ -87,16 +99,23 @@ Open your Positron Settings (`Ctrl+,` or `Cmd+,`) and navigate to **Extensions ‚
 git clone https://github.com/abhinavjnu/positron-stata.git
 cd positron-stata
 
-# Build the extension bundle
-node esbuild.js
+# Install build tooling (esbuild, TypeScript, Positron API types)
+npm install
+
+# Type-check, run the discovery unit tests, and build the bundle
+npm test
+npm run build
 
 # Package into installable .vsix
-python3 package_vsix.py
+python package_vsix.py
 
-# Run end-to-end verification tests
-python3 tests/test_stata_engine.py
-python3 tests/test_discovery.py
-python3 tests/test_packaging.py
+# Kernel unit tests (no Stata needed)
+python tests/test_completeness.py
+python tests/test_engine_unit.py
+python tests/test_packaging.py
+
+# End-to-end test against a licensed Stata installation
+python tests/test_stata_engine.py
 ```
 
 ---
