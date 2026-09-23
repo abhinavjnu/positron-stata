@@ -107,9 +107,11 @@ class StataEngine:
                 from pystata import config
                 config.init(ed)
                 if not getattr(config, "sfiinitialized", True):
+                    stata_msg = config.get_output() if hasattr(config, "get_output") else ""
+                    detail = f"\nStata diagnostic: {stata_msg.strip()}" if stata_msg and stata_msg.strip() else ""
                     raise RuntimeError(
-                        "Stata failed to initialize Python environment (code -7100). "
-                        "This usually indicates an incompatible Python version or architecture mismatch with Stata."
+                        f"Stata failed to initialize Python environment (code -7100).{detail} "
+                        "This usually indicates an incompatible Python version, missing shared library, or architecture mismatch with Stata."
                     )
                 from pystata import stata
                 import sfi
