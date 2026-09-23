@@ -93,9 +93,18 @@ def install_fakes():
 
 class TestStataEngineUnit(unittest.TestCase):
     def setUp(self):
+        self._orig_modules = {k: sys.modules.get(k) for k in ("pystata", "pystata.config", "sfi", "positron_stata_kernel.stata_engine")}
         self.stata, self.sfi = install_fakes()
+        sys.modules.pop("positron_stata_kernel.stata_engine", None)
         from positron_stata_kernel.stata_engine import StataEngine
         self.engine = StataEngine(stata_home=tempfile.gettempdir(), edition="mp")
+
+    def tearDown(self):
+        for k, v in self._orig_modules.items():
+            if v is None:
+                sys.modules.pop(k, None)
+            else:
+                sys.modules[k] = v
 
     def test_success_has_no_error(self):
         res = self.engine.execute("summarize price")
