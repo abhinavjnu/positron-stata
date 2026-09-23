@@ -58,11 +58,11 @@ Open Positron IDE:
 3. Click **Install**.
 
 ### Option 2: Install from `.vsix` Package
-Download the latest `positron-stata-0.1.0.vsix` from [Releases](https://github.com/abhinavjnu/positron-stata/releases) and run:
+Download the latest `positron-stata-0.1.1.vsix` from [Releases](https://github.com/abhinavjnu/positron-stata/releases) and run:
 
 ```bash
 # In Positron
-positron --install-extension positron-stata-0.1.0.vsix
+positron --install-extension positron-stata-0.1.1.vsix
 ```
 
 Alternatively, in Positron, press `Ctrl+Shift+P`, run **Extensions: Install from VSIX...**, and choose the `.vsix` file.

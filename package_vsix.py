@@ -25,7 +25,8 @@ def build_vsix():
     categories = escape(",".join(pkg.get("categories", ["Programming Languages"])))
     keywords = escape(",".join(pkg.get("keywords", ["stata", "positron"])))
     engine = quoteattr(pkg.get("engines", {}).get("vscode", "^1.90.0"))
-    dependencies = quoteattr(",".join(pkg.get("extensionDependencies", [])))
+    ext_deps = pkg.get("extensionDependencies", [])
+    dependencies_prop = f'\n      <Property Id="Microsoft.VisualStudio.Code.ExtensionDependencies" Value={quoteattr(",".join(ext_deps))}/>' if ext_deps else ""
 
     vsix_filename = f"{name}-{version}.vsix"
     vsix_path = os.path.join(base_dir, vsix_filename)
@@ -56,8 +57,7 @@ def build_vsix():
     <GalleryFlags>Public</GalleryFlags>
     <Icon>extension/icon.png</Icon>
     <Properties>
-      <Property Id="Microsoft.VisualStudio.Code.Engine" Value={engine}/>
-      <Property Id="Microsoft.VisualStudio.Code.ExtensionDependencies" Value={dependencies}/>
+      <Property Id="Microsoft.VisualStudio.Code.Engine" Value={engine}/>{dependencies_prop}
       <Property Id="Microsoft.VisualStudio.Code.ExtensionKind" Value="workspace"/>
     </Properties>
   </Metadata>
