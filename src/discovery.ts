@@ -184,8 +184,21 @@ function isWindowsAppsDir(dir: string): boolean {
 
 function newestPythonDirs(entries: string[], pattern: RegExp): string[] {
     const version = (name: string) => {
-        const m = name.match(/(\d+)\D*(\d+)?/);
-        return m ? Number(m[1]) * 1000 + Number(m[2] ?? 0) : 0;
+        const m = name.match(/(\d+)\.?(\d+)?/);
+        if (!m) return 0;
+        let major = 3;
+        let minor = 0;
+        if (m[2] !== undefined) {
+            major = Number(m[1]);
+            minor = Number(m[2]);
+        } else if (m[1].startsWith('3') && m[1].length > 1) {
+            major = 3;
+            minor = Number(m[1].slice(1));
+        } else {
+            minor = Number(m[1]);
+        }
+        // PyStata requires Python <= 3.13; rank >= 3.14 below compatible versions
+        return major === 3 && minor >= 14 ? -1 : major * 1000 + minor;
     };
     return entries.filter(e => pattern.test(e)).sort((a, b) => version(b) - version(a));
 }

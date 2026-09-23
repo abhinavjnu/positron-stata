@@ -62,8 +62,8 @@ test('Windows Python resolution falls back to the newest per-user install', () =
     const python = resolvePythonExecutable({
         platform: 'win32',
         env: { PATH: '', LOCALAPPDATA: 'C:\\Users\\u\\AppData\\Local' },
-        exists: existsIn([`${base}\\Python39\\python.exe`, `${base}\\Python312\\python.exe`, `${base}\\Python310\\python.exe`]),
-        listDir: dir => (norm(dir) === norm(base) ? ['Python39', 'Python312', 'Python310'] : [])
+        exists: existsIn([`${base}\\Python39\\python.exe`, `${base}\\Python314\\python.exe`, `${base}\\Python312\\python.exe`, `${base}\\Python310\\python.exe`]),
+        listDir: dir => (norm(dir) === norm(base) ? ['Python39', 'Python314', 'Python312', 'Python310'] : [])
     });
     assert.equal(norm(python), norm(`${base}\\Python312\\python.exe`));
 });

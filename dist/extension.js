@@ -198,8 +198,20 @@ function isWindowsAppsDir(dir) {
 }
 function newestPythonDirs(entries, pattern) {
   const version = (name) => {
-    const m = name.match(/(\d+)\D*(\d+)?/);
-    return m ? Number(m[1]) * 1e3 + Number(m[2] ?? 0) : 0;
+    const m = name.match(/(\d+)\.?(\d+)?/);
+    if (!m) return 0;
+    let major = 3;
+    let minor = 0;
+    if (m[2] !== void 0) {
+      major = Number(m[1]);
+      minor = Number(m[2]);
+    } else if (m[1].startsWith("3") && m[1].length > 1) {
+      major = 3;
+      minor = Number(m[1].slice(1));
+    } else {
+      minor = Number(m[1]);
+    }
+    return major === 3 && minor >= 14 ? -1 : major * 1e3 + minor;
   };
   return entries.filter((e) => pattern.test(e)).sort((a, b) => version(b) - version(a));
 }
