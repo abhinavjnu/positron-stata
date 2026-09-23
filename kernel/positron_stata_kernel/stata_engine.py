@@ -82,6 +82,12 @@ class StataEngine:
         if self._initialized:
             return
 
+        if sys.version_info >= (3, 14):
+            raise RuntimeError(
+                f"Python {sys.version_info[0]}.{sys.version_info[1]}.{sys.version_info[2]} is not supported by Stata. "
+                "Stata's PyStata C-bridge requires Python <= 3.13. Please configure 'positron-stata.pythonPath' to point to Python 3.9-3.13."
+            )
+
         utilities_path = os.path.join(self.stata_home, "utilities")
         if utilities_path not in sys.path:
             sys.path.insert(0, utilities_path)
@@ -100,6 +106,11 @@ class StataEngine:
             try:
                 from pystata import config
                 config.init(ed)
+                if not getattr(config, "sfiinitialized", True):
+                    raise RuntimeError(
+                        "Stata failed to initialize Python environment (code -7100). "
+                        "This usually indicates an incompatible Python version or architecture mismatch with Stata."
+                    )
                 from pystata import stata
                 import sfi
                 self._stata = stata
@@ -112,7 +123,8 @@ class StataEngine:
 
         raise RuntimeError(
             f"Failed to initialize PyStata from {self.stata_home} (editions tried: {candidate_editions}): {last_error}\n"
-            "Please verify that your Stata license is active and that Stata 17+ is installed at this path."
+            "Please verify that your Stata license is active, that Stata 17+ is installed at this path, "
+            "and that Python <= 3.13 is being used."
         )
 
     def execute(self, code: str, stdout_callback=None, stderr_callback=None) -> ExecutionResult:

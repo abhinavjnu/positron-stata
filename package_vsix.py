@@ -76,8 +76,16 @@ def build_vsix():
 
     # Build extension first
     import subprocess
+    import shutil
     print("Running esbuild...")
-    subprocess.run(["node", os.path.join(base_dir, "esbuild.js")], check=True)
+    node_cmd = ["node"]
+    node_env = os.environ.copy()
+    if not shutil.which("node"):
+        positron_app = "/Applications/Positron.app/Contents/MacOS/Positron"
+        if os.path.exists(positron_app):
+            node_cmd = [positron_app]
+            node_env["ELECTRON_RUN_AS_NODE"] = "1"
+    subprocess.run([*node_cmd, os.path.join(base_dir, "esbuild.js")], check=True, env=node_env)
 
     files_to_include = [
         "package.json",

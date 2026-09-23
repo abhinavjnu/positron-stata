@@ -209,8 +209,18 @@ export function resolvePythonExecutable(opts: PythonResolveOptions): string {
         if (exists(candidate)) return candidate;
     }
 
+    const userHome = env.HOME || env.USERPROFILE || '';
+    if (userHome) {
+        const dedicatedVenv = win
+            ? p.join(userHome, '.local', 'share', 'positron-stata', 'venv', 'Scripts', 'python.exe')
+            : p.join(userHome, '.local', 'share', 'positron-stata', 'venv', 'bin', 'python');
+        if (exists(dedicatedVenv)) return dedicatedVenv;
+    }
+
     const pathDirs = (env.PATH || env.Path || '').split(win ? ';' : ':').filter(Boolean);
-    const names = win ? ['python.exe', 'python3.exe'] : ['python3', 'python'];
+    const names = win
+        ? ['python.exe', 'python3.exe']
+        : ['python3.13', 'python3.12', 'python3.11', 'python3.10', 'python3.9', 'python3', 'python'];
     for (const dir of pathDirs) {
         if (win && isWindowsAppsDir(dir)) continue;
         for (const name of names) {
@@ -236,7 +246,17 @@ export function resolvePythonExecutable(opts: PythonResolveOptions): string {
         return 'python';
     }
 
-    for (const candidate of ['/home/linuxbrew/.linuxbrew/bin/python3', '/usr/local/bin/python3', '/opt/homebrew/bin/python3', '/usr/bin/python3']) {
+    for (const candidate of [
+        '/opt/homebrew/bin/python3.13',
+        '/opt/homebrew/bin/python3.12',
+        '/opt/homebrew/bin/python3.11',
+        '/opt/homebrew/bin/python3.10',
+        '/opt/homebrew/bin/python3.9',
+        '/usr/bin/python3',
+        '/home/linuxbrew/.linuxbrew/bin/python3',
+        '/opt/homebrew/bin/python3',
+        '/usr/local/bin/python3'
+    ]) {
         if (exists(candidate)) return candidate;
     }
     return 'python3';

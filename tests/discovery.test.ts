@@ -98,3 +98,29 @@ test('POSIX Python resolution searches PATH', () => {
     });
     assert.equal(python, '/opt/conda/bin/python3');
 });
+
+test('dedicated positron-stata venv is discovered', () => {
+    const python = resolvePythonExecutable({
+        platform: 'darwin',
+        env: { HOME: '/Users/test', PATH: '/usr/local/bin:/usr/bin' },
+        exists: existsIn([
+            '/Users/test/.local/share/positron-stata/venv/bin/python',
+            '/usr/local/bin/python3'
+        ]),
+        listDir: noDirs
+    });
+    assert.equal(python, '/Users/test/.local/share/positron-stata/venv/bin/python');
+});
+
+test('prefers version-specific python over generic python3 in PATH', () => {
+    const python = resolvePythonExecutable({
+        platform: 'darwin',
+        env: { PATH: '/usr/local/bin' },
+        exists: existsIn([
+            '/usr/local/bin/python3.12',
+            '/usr/local/bin/python3'
+        ]),
+        listDir: noDirs
+    });
+    assert.equal(python, '/usr/local/bin/python3.12');
+});
