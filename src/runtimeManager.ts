@@ -200,12 +200,9 @@ export class StataRuntimeManager implements positron.LanguageRuntimeManager {
 
     async validateSession(sessionId: string): Promise<boolean> {
         try {
-            const supervisorExt = vscode.extensions.getExtension('positron.positron-supervisor');
-            if (supervisorExt && supervisorExt.isActive) {
-                const supervisorApi = supervisorExt.exports as SupervisorApi;
-                if (supervisorApi && typeof supervisorApi.validateSession === 'function') {
-                    return await supervisorApi.validateSession(sessionId);
-                }
+            const supervisorApi = await getSupervisorApi();
+            if (typeof supervisorApi.validateSession === 'function') {
+                return await supervisorApi.validateSession(sessionId);
             }
         } catch {
             // fallback
@@ -218,17 +215,8 @@ export class StataRuntimeManager implements positron.LanguageRuntimeManager {
         sessionMetadata: positron.RuntimeSessionMetadata,
         sessionName: string
     ): Promise<positron.LanguageRuntimeSession> {
-        const supervisorExt = vscode.extensions.getExtension('positron.positron-supervisor');
-        if (!supervisorExt) {
-            throw new Error('positron-supervisor extension is required to restore Stata sessions.');
-        }
-
-        if (!supervisorExt.isActive) {
-            await supervisorExt.activate();
-        }
-
-        const supervisorApi = supervisorExt.exports as SupervisorApi;
-        if (supervisorApi && typeof supervisorApi.restoreSession === 'function') {
+        const supervisorApi = await getSupervisorApi();
+        if (typeof supervisorApi.restoreSession === 'function') {
             return await supervisorApi.restoreSession(
                 runtimeMetadata,
                 sessionMetadata,
@@ -243,17 +231,8 @@ export class StataRuntimeManager implements positron.LanguageRuntimeManager {
         runtimeMetadata: positron.LanguageRuntimeMetadata,
         sessionMetadata: positron.RuntimeSessionMetadata
     ): Promise<positron.LanguageRuntimeSession> {
-        const supervisorExt = vscode.extensions.getExtension('positron.positron-supervisor');
-        if (!supervisorExt) {
-            throw new Error('positron-supervisor extension is required to launch Stata sessions.');
-        }
-
-        if (!supervisorExt.isActive) {
-            await supervisorExt.activate();
-        }
-
-        const supervisorApi = supervisorExt.exports as SupervisorApi;
-        if (!supervisorApi || typeof supervisorApi.createSession !== 'function') {
+        const supervisorApi = await getSupervisorApi();
+        if (typeof supervisorApi.createSession !== 'function') {
             throw new Error('Supervisor API createSession method not found.');
         }
 
@@ -270,6 +249,23 @@ export class StataRuntimeManager implements positron.LanguageRuntimeManager {
             initialDynState(runtimeMetadata.runtimeName)
         );
     }
+}
+
+// The manifest no longer declares positron-supervisor as a dependency (Open VSX cannot
+// resolve built-in Positron extensions), so it may not be active yet when a session call arrives.
+async function getSupervisorApi(): Promise<SupervisorApi> {
+    const supervisorExt = vscode.extensions.getExtension('positron.positron-supervisor');
+    if (!supervisorExt) {
+        throw new Error('positron-supervisor extension is required to run Stata sessions.');
+    }
+    if (!supervisorExt.isActive) {
+        await supervisorExt.activate();
+    }
+    const supervisorApi = supervisorExt.exports as SupervisorApi | undefined;
+    if (!supervisorApi) {
+        throw new Error('positron-supervisor did not expose its API.');
+    }
+    return supervisorApi;
 }
 
 function initialDynState(sessionName: string | undefined): positron.LanguageRuntimeDynState {

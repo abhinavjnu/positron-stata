@@ -411,27 +411,17 @@ var StataRuntimeManager = class {
   }
   async validateSession(sessionId) {
     try {
-      const supervisorExt = vscode.extensions.getExtension("positron.positron-supervisor");
-      if (supervisorExt && supervisorExt.isActive) {
-        const supervisorApi = supervisorExt.exports;
-        if (supervisorApi && typeof supervisorApi.validateSession === "function") {
-          return await supervisorApi.validateSession(sessionId);
-        }
+      const supervisorApi = await getSupervisorApi();
+      if (typeof supervisorApi.validateSession === "function") {
+        return await supervisorApi.validateSession(sessionId);
       }
     } catch {
     }
     return true;
   }
   async restoreSession(runtimeMetadata, sessionMetadata, sessionName) {
-    const supervisorExt = vscode.extensions.getExtension("positron.positron-supervisor");
-    if (!supervisorExt) {
-      throw new Error("positron-supervisor extension is required to restore Stata sessions.");
-    }
-    if (!supervisorExt.isActive) {
-      await supervisorExt.activate();
-    }
-    const supervisorApi = supervisorExt.exports;
-    if (supervisorApi && typeof supervisorApi.restoreSession === "function") {
+    const supervisorApi = await getSupervisorApi();
+    if (typeof supervisorApi.restoreSession === "function") {
       return await supervisorApi.restoreSession(
         runtimeMetadata,
         sessionMetadata,
@@ -441,15 +431,8 @@ var StataRuntimeManager = class {
     return await this.createSession(runtimeMetadata, sessionMetadata);
   }
   async createSession(runtimeMetadata, sessionMetadata) {
-    const supervisorExt = vscode.extensions.getExtension("positron.positron-supervisor");
-    if (!supervisorExt) {
-      throw new Error("positron-supervisor extension is required to launch Stata sessions.");
-    }
-    if (!supervisorExt.isActive) {
-      await supervisorExt.activate();
-    }
-    const supervisorApi = supervisorExt.exports;
-    if (!supervisorApi || typeof supervisorApi.createSession !== "function") {
+    const supervisorApi = await getSupervisorApi();
+    if (typeof supervisorApi.createSession !== "function") {
       throw new Error("Supervisor API createSession method not found.");
     }
     const extraData = runtimeMetadata.extraRuntimeData || {};
@@ -465,6 +448,20 @@ var StataRuntimeManager = class {
     );
   }
 };
+async function getSupervisorApi() {
+  const supervisorExt = vscode.extensions.getExtension("positron.positron-supervisor");
+  if (!supervisorExt) {
+    throw new Error("positron-supervisor extension is required to run Stata sessions.");
+  }
+  if (!supervisorExt.isActive) {
+    await supervisorExt.activate();
+  }
+  const supervisorApi = supervisorExt.exports;
+  if (!supervisorApi) {
+    throw new Error("positron-supervisor did not expose its API.");
+  }
+  return supervisorApi;
+}
 function initialDynState(sessionName) {
   return {
     sessionName: sessionName || "Stata",
