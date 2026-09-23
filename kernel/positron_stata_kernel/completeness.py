@@ -19,15 +19,19 @@ COMPLETE: Dict[str, str] = {"status": "complete", "indent": ""}
 INCOMPLETE: Dict[str, str] = {"status": "incomplete", "indent": "    "}
 
 
-def check(code: str) -> Dict[str, str]:
+def strip_strings_and_comments(code: str) -> str:
+    """Blank out string literals and comments, keeping `///` continuation markers."""
     text = _STRINGS.sub('""', code)
     text = _BLOCK_COMMENTS.sub(" ", text)
+    text = _LINE_COMMENTS.sub("", text)
+    return _STAR_COMMENTS.sub("", text)
+
+
+def check(code: str) -> Dict[str, str]:
+    text = strip_strings_and_comments(code)
+    # Checked after stripping so "/*" inside a // comment doesn't count.
     if "/*" in text:
         return INCOMPLETE
-
-    # Strip line and star comments while preserving `///` continuation tokens
-    text = _LINE_COMMENTS.sub("", text)
-    text = _STAR_COMMENTS.sub("", text)
 
     lines = [line for line in text.splitlines() if line.strip()]
     if not lines:

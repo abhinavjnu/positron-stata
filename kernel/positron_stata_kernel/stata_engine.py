@@ -3,17 +3,18 @@ StataEngine: In-process Stata execution engine via PyStata and SFI.
 Connects directly to Stata 19 MP (or any licensed Stata installation).
 """
 
+import hashlib
 import io
 import os
 import re
 import sys
 import tempfile
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
-_STRINGS = re.compile(r'`".*?"\'|"[^"\n]*"', re.DOTALL)
-_BLOCK_COMMENTS = re.compile(r"/\*.*?\*/", re.DOTALL)
-_LINE_COMMENTS = re.compile(r"(?:^|\s)//(?!/).*$", re.MULTILINE)
-_STAR_COMMENTS = re.compile(r"^\s*\*.*$", re.MULTILINE)
+from .completeness import strip_strings_and_comments
+
+# Global used to read back `_rc` after `capture graph drop Graph`.
+_RC_GLOBAL = "positron_stata_rc"
 
 _PLOT_TRIGGER = re.compile(
     r"\b(graph|twoway|tw|scatter|line|connected|histogram|hist|kdensity|lowess|lpoly|"
@@ -75,6 +76,7 @@ class StataEngine:
         self._stata = None
         self._sfi = None
         self._last_signature: Optional[Tuple] = None
+        self._shown_graphs: Set[str] = set()
 
     def initialize(self):
         if self._initialized:
@@ -164,17 +166,26 @@ class StataEngine:
         )
 
     def _check_and_export_plots(self, executed_code: str) -> List[str]:
-        """Detect and export any newly generated Stata graphs to SVG."""
-        plots = []
-        # Strip comments and string literals so words like "do" or "line" inside strings/comments don't trigger export
-        clean_code = _STRINGS.sub('""', executed_code)
-        clean_code = _BLOCK_COMMENTS.sub(" ", clean_code)
-        clean_code = _LINE_COMMENTS.sub("", clean_code)
-        clean_code = _STAR_COMMENTS.sub("", clean_code)
+        """Export the current graph to SVG if it has not been shown yet."""
+        # Strings and comments are ignored so `display "do"` or `// line` don't trigger an export.
+        if not _PLOT_TRIGGER.search(strip_strings_and_comments(executed_code)):
+            return []
 
-        if not _PLOT_TRIGGER.search(clean_code):
-            return plots
+        svg = self._export_current_graph()
+        if svg is None:
+            return []
 
+        digest = hashlib.sha1(svg.encode("utf-8", "replace")).hexdigest()
+        # The unnamed `Graph` is redrawn by every plot command, so it is always shown and then
+        # dropped. Named graphs stay in memory for `graph combine`, so a named graph that is
+        # still current would otherwise be re-sent after every later trigger command.
+        is_default_graph = self._drop_default_graph()
+        if not is_default_graph and digest in self._shown_graphs:
+            return []
+        self._shown_graphs.add(digest)
+        return [svg]
+
+    def _export_current_graph(self) -> Optional[str]:
         tmp = None
         try:
             with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as tf:
@@ -187,12 +198,7 @@ class StataEngine:
                 with open(tmp, "r", encoding="utf-8", errors="replace") as f:
                     svg_content = f.read()
                 if "<svg" in svg_content:
-                    plots.append(svg_content)
-                    # Drop only the default active 'Graph', preserving user-named graphs for `graph combine`
-                    try:
-                        self._stata.run("qui capture graph drop Graph")
-                    except Exception:
-                        pass
+                    return svg_content
         except Exception:
             pass
         finally:
@@ -201,8 +207,18 @@ class StataEngine:
                     os.remove(tmp)
                 except Exception:
                     pass
+        return None
 
-        return plots
+    def _drop_default_graph(self) -> bool:
+        """Drop the unnamed graph `Graph`; return whether it existed."""
+        try:
+            self._stata.run("quietly capture graph drop Graph")
+            self._stata.run(f"global {_RC_GLOBAL} = _rc")
+            rc = self._sfi.Macro.getGlobal(_RC_GLOBAL)
+            self._stata.run(f"macro drop {_RC_GLOBAL}")
+            return str(rc).strip() == "0"
+        except Exception:
+            return False
 
     def _dataset_signature(self) -> Tuple:
         data = self._sfi.Data

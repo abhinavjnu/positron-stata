@@ -42,7 +42,9 @@ class TestCompleteness(unittest.TestCase):
 
     def test_block_comments(self):
         self.assertIncomplete("/* still commenting")
+        self.assertIncomplete("/* still commenting\n * more")
         self.assertComplete("/* done */ summarize")
+        self.assertComplete("summarize price // see /* note")
 
     def test_program_blocks(self):
         self.assertIncomplete("program define hello\n    display 1")
