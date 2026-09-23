@@ -41,15 +41,16 @@ class OpenStataEngine:
         candidates = [
             user_path,
             os.environ.get("OPENSTATA_BIN"),
-            "/media/abhinav/WorkData/.cargo_target/release/open-stata",
-            "/home/abhinav/.cargo/bin/open-stata",
-            "/media/abhinav/WorkData/.cargo_target/debug/open-stata",
-            shutil.which("open-stata")
+            shutil.which("open-stata"),
+            os.path.expanduser("~/.cargo/bin/open-stata"),
+            os.path.expanduser("~/.local/bin/open-stata"),
+            "/usr/local/bin/open-stata",
+            "/opt/homebrew/bin/open-stata",
         ]
         for c in candidates:
             if c and os.path.exists(c) and os.access(c, os.X_OK):
                 return c
-        return "/media/abhinav/WorkData/.cargo_target/release/open-stata"
+        return shutil.which("open-stata") or "open-stata"
 
     def _start_process(self):
         try:

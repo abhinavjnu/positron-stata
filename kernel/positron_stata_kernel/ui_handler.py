@@ -9,8 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-# Import Positron Python modules
-sys.path.insert(0, "/usr/share/positron/resources/app/extensions/positron-python/python_files/posit")
+from . import _positron_loader
 from positron.positron_comm import PositronComm, JsonRpcErrorCode
 from positron.ui_comm import (
     UiBackendMessageContent,

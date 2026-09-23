@@ -18,11 +18,9 @@ export function getOpenStataExecutable(): string | undefined {
         return envBin;
     }
 
-    // 3. Known release, debug, and standard install locations
+    // 3. Standard installation locations
     const binName = process.platform === 'win32' ? 'open-stata.exe' : 'open-stata';
     const candidates = [
-        '/media/abhinav/WorkData/.cargo_target/release/open-stata',
-        '/media/abhinav/WorkData/.cargo_target/debug/open-stata',
         path.join(os.homedir(), '.cargo', 'bin', binName),
         path.join(os.homedir(), '.local', 'bin', binName),
         path.join('/usr', 'local', 'bin', binName),

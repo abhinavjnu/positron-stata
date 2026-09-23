@@ -8,8 +8,7 @@ import sys
 import time
 from typing import Any, Dict, List, Optional
 
-# Import Positron Python modules
-sys.path.insert(0, "/usr/share/positron/resources/app/extensions/positron-python/python_files/posit")
+from . import _positron_loader
 from positron.variables_comm import (
     Variable, VariableKind, VariableList, RefreshParams, InspectedVariable,
     VariablesBackendMessageContent, ListRequest, InspectRequest, ViewRequest,

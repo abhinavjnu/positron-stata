@@ -60,8 +60,6 @@ function getOpenStataExecutable() {
   }
   const binName = process.platform === "win32" ? "open-stata.exe" : "open-stata";
   const candidates = [
-    "/media/abhinav/WorkData/.cargo_target/release/open-stata",
-    "/media/abhinav/WorkData/.cargo_target/debug/open-stata",
     path.join(os.homedir(), ".cargo", "bin", binName),
     path.join(os.homedir(), ".local", "bin", binName),
     path.join("/usr", "local", "bin", binName),
@@ -269,18 +267,194 @@ var DtaCustomEditorProvider = class _DtaCustomEditorProvider {
 
 // src/runtimeManager.ts
 function getPythonExecutable2() {
+  const configPython = vscode2.workspace.getConfiguration("positron-stata").get("pythonPath");
+  if (configPython && fs2.existsSync(configPython)) {
+    return configPython;
+  }
   const candidates = [
     "/home/linuxbrew/.linuxbrew/bin/python3",
     "/usr/local/bin/python3",
+    "/opt/homebrew/bin/python3",
     "/usr/bin/python3",
     "python3"
   ];
   for (const p of candidates) {
-    if (fs2.existsSync(p)) {
+    if (p === "python3" || fs2.existsSync(p)) {
       return p;
     }
   }
   return "python3";
+}
+function getPositronPythonFilesPath() {
+  if (vscode2.env.appRoot) {
+    const candidate = path2.join(vscode2.env.appRoot, "extensions", "positron-python", "python_files", "posit");
+    if (fs2.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  const fallbacks = [
+    "/usr/share/positron/resources/app/extensions/positron-python/python_files/posit",
+    "/Applications/Positron.app/Contents/Resources/app/extensions/positron-python/python_files/posit",
+    path2.join(process.env["LOCALAPPDATA"] || "", "Programs", "Positron", "resources", "app", "extensions", "positron-python", "python_files", "posit")
+  ];
+  for (const fb of fallbacks) {
+    if (fb && fs2.existsSync(fb)) {
+      return fb;
+    }
+  }
+  return void 0;
+}
+function findStataInstallations() {
+  const installations = [];
+  const seen = /* @__PURE__ */ new Set();
+  const addInstallation = (homeDir, exePath, versionHint, editionHint) => {
+    const key = `${homeDir}:${exePath}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    const exeLower = path2.basename(exePath).toLowerCase();
+    let edition = editionHint || "be";
+    if (exeLower.includes("mp")) {
+      edition = "mp";
+    } else if (exeLower.includes("se")) {
+      edition = "se";
+    }
+    let editionStr = "BE";
+    if (edition === "mp") editionStr = "MP (Parallel Edition)";
+    else if (edition === "se") editionStr = "SE";
+    let version = versionHint || "19";
+    const match = homeDir.match(/stata(?:now)?\s*(\d+)/i) || exePath.match(/stata(?:now)?\s*(\d+)/i);
+    if (match) {
+      version = match[1];
+    }
+    const isStataNow = homeDir.toLowerCase().includes("statanow") || exePath.toLowerCase().includes("statanow");
+    const prefix = isStataNow ? `StataNow ${version}` : `Stata ${version}`;
+    installations.push({
+      homeDir,
+      executable: exePath,
+      version,
+      edition,
+      displayName: `${prefix} ${editionStr}`,
+      shortName: `${version} ${edition.toUpperCase()}`,
+      source: `System (${homeDir})`
+    });
+  };
+  const configHome = vscode2.workspace.getConfiguration("positron-stata").get("stataHome");
+  const configEdition = vscode2.workspace.getConfiguration("positron-stata").get("stataEdition");
+  if (configHome && fs2.existsSync(configHome)) {
+    const candidateBins = [
+      "stata-mp",
+      "stata-se",
+      "stata",
+      "StataMP-64.exe",
+      "StataSE-64.exe",
+      "Stata-64.exe",
+      "StataMP.app/Contents/MacOS/stata-mp",
+      "StataSE.app/Contents/MacOS/stata-se",
+      "Stata.app/Contents/MacOS/stata"
+    ];
+    let foundBin;
+    for (const b of candidateBins) {
+      const full = path2.join(configHome, b);
+      if (fs2.existsSync(full)) {
+        foundBin = full;
+        break;
+      }
+    }
+    addInstallation(configHome, foundBin || configHome, void 0, configEdition);
+  }
+  const linuxDirs = [
+    "/usr/local/stata19",
+    "/usr/local/stata18",
+    "/usr/local/stata17",
+    "/usr/local/stata",
+    "/opt/stata19",
+    "/opt/stata18",
+    "/opt/stata17",
+    "/opt/stata"
+  ];
+  for (const dir of linuxDirs) {
+    if (!fs2.existsSync(dir)) continue;
+    const bins = ["stata-mp", "stata-se", "stata"];
+    for (const b of bins) {
+      const p = path2.join(dir, b);
+      if (fs2.existsSync(p)) {
+        addInstallation(dir, p);
+        break;
+      }
+    }
+  }
+  const macBaseDirs = [
+    "/Applications/StataNow 19",
+    "/Applications/StataNow19",
+    "/Applications/StataNow",
+    "/Applications/Stata 19",
+    "/Applications/Stata19",
+    "/Applications/Stata 18",
+    "/Applications/Stata18",
+    "/Applications/Stata 17",
+    "/Applications/Stata17",
+    "/Applications/Stata"
+  ];
+  for (const base of macBaseDirs) {
+    if (!fs2.existsSync(base)) continue;
+    const appEditions = [
+      ["StataMP.app", "mp"],
+      ["StataSE.app", "se"],
+      ["Stata.app", "be"]
+    ];
+    for (const [app, ed] of appEditions) {
+      const cliPath = path2.join(base, app, "Contents", "MacOS", `stata-${ed}`);
+      const guiPath = path2.join(base, app, "Contents", "MacOS", app.replace(".app", ""));
+      if (fs2.existsSync(cliPath)) {
+        addInstallation(base, cliPath, void 0, ed);
+        break;
+      } else if (fs2.existsSync(guiPath)) {
+        addInstallation(base, guiPath, void 0, ed);
+        break;
+      }
+    }
+  }
+  const progFiles = [
+    process.env["ProgramFiles"],
+    process.env["ProgramFiles(x86)"],
+    "C:\\Program Files",
+    "C:\\Program Files (x86)"
+  ].filter(Boolean);
+  for (const pf of progFiles) {
+    const winDirs = ["StataNow19", "Stata19", "Stata18", "Stata17", "Stata"];
+    for (const wd of winDirs) {
+      const dir = path2.join(pf, wd);
+      if (!fs2.existsSync(dir)) continue;
+      const bins = [
+        ["StataMP-64.exe", "mp"],
+        ["StataSE-64.exe", "se"],
+        ["Stata-64.exe", "be"],
+        ["StataMP.exe", "mp"],
+        ["StataSE.exe", "se"],
+        ["Stata.exe", "be"]
+      ];
+      for (const [b, ed] of bins) {
+        const full = path2.join(dir, b);
+        if (fs2.existsSync(full)) {
+          addInstallation(dir, full, void 0, ed);
+          break;
+        }
+      }
+    }
+  }
+  const envPath = process.env["PATH"] || "";
+  const pathBins = ["stata-mp", "stata-se", "stata"];
+  for (const dir of envPath.split(path2.delimiter)) {
+    if (!dir) continue;
+    for (const b of pathBins) {
+      const full = path2.join(dir, b);
+      if (fs2.existsSync(full)) {
+        const homeDir = path2.dirname(dir);
+        addInstallation(homeDir, full);
+      }
+    }
+  }
+  return installations;
 }
 var StataRuntimeManager = class {
   constructor(context) {
@@ -307,38 +481,35 @@ var StataRuntimeManager = class {
     try {
       const pythonBin = getPythonExecutable2();
       const kernelPythonPath = path2.join(this.context.extensionPath, "kernel");
-      const stata19Paths = [
-        "/usr/local/stata19/stata-mp",
-        "/usr/local/stata19/stata-se",
-        "/usr/local/stata19/stata",
-        "/usr/local/stata/stata-mp",
-        "/usr/local/stata/stata"
-      ];
-      let foundStata19;
-      for (const p of stata19Paths) {
-        if (fs2.existsSync(p)) {
-          foundStata19 = p;
-          break;
+      const positronPythonFiles = getPositronPythonFilesPath();
+      const stataInstalls = findStataInstallations();
+      for (const inst of stataInstalls) {
+        const runtimeId = `stata-${inst.version}-${inst.edition}-official`;
+        const envVars = {
+          PYTHONPATH: kernelPythonPath,
+          POSITRON_STATA_ENGINE: "stata",
+          STATA_HOME: inst.homeDir,
+          STATA_EDITION: inst.edition,
+          STATA_VERSION: inst.version
+        };
+        if (positronPythonFiles) {
+          envVars["POSITRON_PYTHON_FILES"] = positronPythonFiles;
         }
-      }
-      if (foundStata19) {
-        const isMP = foundStata19.includes("mp");
-        const editionStr = isMP ? "MP (Parallel Edition)" : "SE";
         const metadata = {
-          runtimeId: "stata-19-mp-official",
-          runtimeName: `StataNow 19.5 ${editionStr}`,
-          runtimeShortName: isMP ? "19.5 MP" : "19.5 SE",
-          runtimeVersion: "19.5",
-          runtimeSource: "System (/usr/local/stata19)",
+          runtimeId,
+          runtimeName: inst.displayName,
+          runtimeShortName: inst.shortName,
+          runtimeVersion: `${inst.version}.0`,
+          runtimeSource: inst.source,
           languageName: "Stata",
           languageId: "stata",
-          languageVersion: "19.5",
-          runtimePath: foundStata19,
+          languageVersion: inst.version,
+          runtimePath: inst.executable,
           base64EncodedIconSvg: void 0,
           startupBehavior: positron.LanguageRuntimeStartupBehavior.StartOnDemand,
           sessionLocation: positron.LanguageRuntimeSessionLocation.Local,
           extraRuntimeData: {
-            engine: "stata19",
+            engine: "stata",
             kernelSpec: {
               argv: [
                 pythonBin,
@@ -347,16 +518,11 @@ var StataRuntimeManager = class {
                 "-f",
                 "{connection_file}"
               ],
-              display_name: `StataNow 19.5 ${editionStr}`,
+              display_name: inst.displayName,
               language: "stata",
               interrupt_mode: "message",
               kernel_protocol_version: "5.3",
-              env: {
-                PYTHONPATH: kernelPythonPath,
-                POSITRON_STATA_ENGINE: "stata19",
-                STATA_HOME: "/usr/local/stata19",
-                STATA_EDITION: isMP ? "mp" : "se"
-              }
+              env: envVars
             }
           }
         };
@@ -366,12 +532,20 @@ var StataRuntimeManager = class {
       }
       const foundOpenStata = getOpenStataExecutable();
       if (foundOpenStata) {
+        const envVars = {
+          PYTHONPATH: kernelPythonPath,
+          POSITRON_STATA_ENGINE: "openstata",
+          OPENSTATA_BIN: foundOpenStata
+        };
+        if (positronPythonFiles) {
+          envVars["POSITRON_PYTHON_FILES"] = positronPythonFiles;
+        }
         const metadata = {
           runtimeId: "open-stata-rust",
           runtimeName: "OpenStata (Rust Engine)",
           runtimeShortName: "OpenStata",
           runtimeVersion: "0.1.0",
-          runtimeSource: "Rust Local Target",
+          runtimeSource: "Open Source (Rust)",
           languageName: "Stata",
           languageId: "stata",
           languageVersion: "19.5",
@@ -393,11 +567,7 @@ var StataRuntimeManager = class {
               language: "stata",
               interrupt_mode: "message",
               kernel_protocol_version: "5.3",
-              env: {
-                PYTHONPATH: kernelPythonPath,
-                POSITRON_STATA_ENGINE: "openstata",
-                OPENSTATA_BIN: foundOpenStata
-              }
+              env: envVars
             }
           }
         };
@@ -411,8 +581,10 @@ var StataRuntimeManager = class {
     }
   }
   async recommendedWorkspaceRuntime() {
-    if (this._discoveredRuntimes.has("stata-19-mp-official")) {
-      return this._discoveredRuntimes.get("stata-19-mp-official");
+    for (const [id, meta] of this._discoveredRuntimes.entries()) {
+      if (id.startsWith("stata-")) {
+        return meta;
+      }
     }
     if (this._discoveredRuntimes.has("open-stata-rust")) {
       return this._discoveredRuntimes.get("open-stata-rust");
@@ -490,19 +662,22 @@ function activate(context) {
     vscode3.commands.registerCommand("stata.selectEngine", async () => {
       const options = [
         {
-          label: "StataNow 19.5 MP (Official)",
-          description: "Full licensed Stata 19 MP Parallel Edition via PyStata"
-        },
-        {
-          label: "OpenStata (Rust Engine)",
-          description: "High-performance open-source Rust engine"
+          label: "Stata (Official)",
+          description: "In-process execution via licensed Stata installation"
         }
       ];
+      const openStataBin = getOpenStataExecutable();
+      if (openStataBin) {
+        options.push({
+          label: "OpenStata (Rust Engine)",
+          description: "Standalone open-source Rust engine"
+        });
+      }
       const selected = await vscode3.window.showQuickPick(options, {
         placeHolder: "Select active Stata engine for console"
       });
       if (selected) {
-        const engine = selected.label.includes("OpenStata") ? "openstata" : "stata19";
+        const engine = selected.label.includes("OpenStata") ? "openstata" : "stata";
         await positron2.runtime.executeCode("stata", `%engine ${engine}
 `, false, true);
         vscode3.window.showInformationMessage(`Switched Stata engine to: ${selected.label}`);

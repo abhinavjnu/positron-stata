@@ -5,14 +5,20 @@
   "version": "0.1.0",
   "publisher": "abhinav",
   "license": "MIT",
+  "icon": "icon.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/abhinavk/positron-stata"
+  },
+  "homepage": "https://github.com/abhinavk/positron-stata#readme",
+  "bugs": {
+    "url": "https://github.com/abhinavk/positron-stata/issues"
   },
   "keywords": [
     "stata",
     "open-stata",
     "econometrics",
+    "statistics",
     "data-science",
     "positron"
   ],
@@ -55,12 +61,34 @@
       }
     ],
     "configuration": {
-      "title": "Stata / OpenStata",
+      "title": "Stata Support",
       "properties": {
+        "positron-stata.stataHome": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the Stata installation directory (e.g. /usr/local/stata19, /Applications/StataNow 19, or C:\\Program Files\\Stata19). If blank, automatically discovered."
+        },
+        "positron-stata.stataEdition": {
+          "type": "string",
+          "default": "auto",
+          "enum": ["auto", "mp", "se", "be"],
+          "enumDescriptions": [
+            "Automatically detect highest installed edition (MP > SE > BE)",
+            "Stata/MP (Multi-Processing / Parallel Edition)",
+            "Stata/SE (Special Edition)",
+            "Stata/BE (Basic Edition / Intercooled)"
+          ],
+          "description": "The Stata edition to initialize PyStata with."
+        },
+        "positron-stata.pythonPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the Python interpreter with PyStata installed. If blank, automatically detected from PATH or virtual environments."
+        },
         "positron-stata.openStataPath": {
           "type": "string",
           "default": "",
-          "description": "Path to the open-stata binary executable."
+          "description": "Optional path to the open-stata binary executable for open-source Stata execution or fast .dta conversion."
         }
       }
     },

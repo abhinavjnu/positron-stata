@@ -21,9 +21,9 @@ class ExecutionResult:
 
 
 class StataEngine:
-    def __init__(self, stata_home: str = "/usr/local/stata19", edition: str = "mp"):
-        self.stata_home = stata_home
-        self.edition = edition
+    def __init__(self, stata_home: Optional[str] = None, edition: Optional[str] = None):
+        self.stata_home = stata_home or os.environ.get("STATA_HOME", "/usr/local/stata19")
+        self.edition = edition or os.environ.get("STATA_EDITION", "mp")
         self._initialized = False
         self._stata = None
         self._sfi = None
@@ -49,7 +49,10 @@ class StataEngine:
             self._sfi = sfi
             self._initialized = True
         except Exception as e:
-            raise RuntimeError(f"Failed to initialize PyStata from {self.stata_home}: {e}")
+            raise RuntimeError(
+                f"Failed to initialize PyStata from {self.stata_home} (edition: {self.edition}): {e}\n"
+                "Please verify that your Stata license is active and that Stata 17+ is installed at this path."
+            )
 
     def execute(self, code: str) -> ExecutionResult:
         if not self._initialized:

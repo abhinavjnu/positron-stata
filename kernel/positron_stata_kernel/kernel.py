@@ -7,8 +7,7 @@ import os
 import sys
 from typing import Optional
 
-# Ensure Positron Python files are on sys.path
-sys.path.insert(0, "/usr/share/positron/resources/app/extensions/positron-python/python_files/posit")
+from . import _positron_loader
 
 # CRITICAL: Import ipkernel first so comm registers ipykernel.comm.manager.CommManager
 from ipykernel import ipkernel
@@ -58,17 +57,18 @@ class PositronStataKernel(Kernel):
         for msg_type in comm_msg_types:
             self.shell_handlers[msg_type] = getattr(self.comm_manager, msg_type)
 
-        # Select engine based on environment variable (default: stata19)
-        engine_type = os.environ.get("POSITRON_STATA_ENGINE", "stata19").lower()
+        # Select engine based on environment variable (default: stata)
+        engine_type = os.environ.get("POSITRON_STATA_ENGINE", "stata").lower()
         if engine_type == "openstata":
-            bin_path = os.environ.get("OPENSTATA_BIN", "/media/abhinav/WorkData/.cargo_target/debug/open-stata")
+            bin_path = os.environ.get("OPENSTATA_BIN")
             self.engine = OpenStataEngine(binary_path=bin_path)
             self.banner = "Positron OpenStata Kernel (Rust Engine)"
         else:
             stata_home = os.environ.get("STATA_HOME", "/usr/local/stata19")
             edition = os.environ.get("STATA_EDITION", "mp")
+            version = os.environ.get("STATA_VERSION", "19")
             self.engine = StataEngine(stata_home=stata_home, edition=edition)
-            self.banner = f"Positron Stata Kernel (StataNow 19.5 {edition.upper()})"
+            self.banner = f"Positron Stata Kernel (Stata {version} {edition.upper()})"
 
         # Initialize Positron services
         self.job_queue = BackgroundJobQueue()

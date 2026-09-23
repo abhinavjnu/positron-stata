@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as positron from 'positron';
 import { StataRuntimeManager } from './runtimeManager';
-import { DtaCustomEditorProvider, openDtaInNativeDataExplorer } from './dtaEditorProvider';
+import { DtaCustomEditorProvider, openDtaInNativeDataExplorer, getOpenStataExecutable } from './dtaEditorProvider';
 
 let runtimeManager: StataRuntimeManager | undefined;
 
@@ -57,21 +57,25 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('stata.selectEngine', async () => {
             const options: vscode.QuickPickItem[] = [
                 {
-                    label: 'StataNow 19.5 MP (Official)',
-                    description: 'Full licensed Stata 19 MP Parallel Edition via PyStata'
-                },
-                {
-                    label: 'OpenStata (Rust Engine)',
-                    description: 'High-performance open-source Rust engine'
+                    label: 'Stata (Official)',
+                    description: 'In-process execution via licensed Stata installation'
                 }
             ];
+
+            const openStataBin = getOpenStataExecutable();
+            if (openStataBin) {
+                options.push({
+                    label: 'OpenStata (Rust Engine)',
+                    description: 'Standalone open-source Rust engine'
+                });
+            }
 
             const selected = await vscode.window.showQuickPick(options, {
                 placeHolder: 'Select active Stata engine for console'
             });
 
             if (selected) {
-                const engine = selected.label.includes('OpenStata') ? 'openstata' : 'stata19';
+                const engine = selected.label.includes('OpenStata') ? 'openstata' : 'stata';
                 await positron.runtime.executeCode('stata', `%engine ${engine}\n`, false, true);
                 vscode.window.showInformationMessage(`Switched Stata engine to: ${selected.label}`);
             }

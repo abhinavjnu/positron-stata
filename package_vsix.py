@@ -50,6 +50,7 @@ def build_vsix():
     <Tags>{keywords}</Tags>
     <Categories>{categories}</Categories>
     <GalleryFlags>Public</GalleryFlags>
+    <Icon>extension/icon.png</Icon>
     <Properties>
       <Property Id="Microsoft.VisualStudio.Code.Engine" Value="^1.90.0"/>
       <Property Id="Microsoft.VisualStudio.Code.ExtensionDependencies" Value="positron.positron-supervisor"/>
@@ -64,14 +65,21 @@ def build_vsix():
     <Asset Type="Microsoft.VisualStudio.Code.Manifest" Path="extension/package.json" Addressable="true"/>
     <Asset Type="Microsoft.VisualStudio.Services.Content.Details" Path="extension/README.md" Addressable="true"/>
     <Asset Type="Microsoft.VisualStudio.Services.Content.License" Path="extension/LICENSE" Addressable="true"/>
+    <Asset Type="Microsoft.VisualStudio.Services.Icons.Default" Path="extension/icon.png" Addressable="true"/>
   </Assets>
 </PackageManifest>
 """
+
+    # Build extension first
+    import subprocess
+    print("Running esbuild...")
+    subprocess.run(["node", os.path.join(base_dir, "esbuild.js")], check=True)
 
     files_to_include = [
         "package.json",
         "README.md",
         "LICENSE",
+        "icon.png",
         "language-configuration.json",
         "dist/extension.js",
         "syntaxes/stata.tmLanguage.json",

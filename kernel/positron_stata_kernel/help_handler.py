@@ -7,8 +7,7 @@ import logging
 import sys
 from typing import Optional
 
-# Import Positron Python modules
-sys.path.insert(0, "/usr/share/positron/resources/app/extensions/positron-python/python_files/posit")
+from . import _positron_loader
 from positron.positron_comm import PositronComm
 from positron.help_comm import (
     HelpBackendMessageContent,
