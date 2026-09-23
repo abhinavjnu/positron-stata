@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import * as positron from 'positron';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getOpenStataExecutable } from './dtaEditorProvider';
 
 interface SupervisorApi {
     createSession(
@@ -304,56 +303,6 @@ export class StataRuntimeManager implements positron.LanguageRuntimeManager {
                 };
                 this._discoveredRuntimes.set(metadata.runtimeId, metadata);
                 this._discoveredRuntimeCount++;
-                yield metadata;
-            }
-
-            // 2. Discover OpenStata (Rust Engine) ONLY IF present/configured
-            const foundOpenStata = getOpenStataExecutable();
-
-            if (foundOpenStata) {
-                const envVars: Record<string, string> = {
-                    PYTHONPATH: kernelPythonPath,
-                    POSITRON_STATA_ENGINE: 'openstata',
-                    OPENSTATA_BIN: foundOpenStata
-                };
-                if (positronPythonFiles) {
-                    envVars['POSITRON_PYTHON_FILES'] = positronPythonFiles;
-                }
-
-                const metadata: positron.LanguageRuntimeMetadata = {
-                    runtimeId: 'open-stata-rust',
-                    runtimeName: 'OpenStata (Rust Engine)',
-                    runtimeShortName: 'OpenStata',
-                    runtimeVersion: '0.1.0',
-                    runtimeSource: 'Open Source (Rust)',
-                    languageName: 'Stata',
-                    languageId: 'stata',
-                    languageVersion: '19.5',
-                    runtimePath: foundOpenStata,
-                    base64EncodedIconSvg: undefined,
-                    startupBehavior: positron.LanguageRuntimeStartupBehavior.StartOnDemand,
-                    sessionLocation: positron.LanguageRuntimeSessionLocation.Local,
-                    extraRuntimeData: {
-                        engine: 'openstata',
-                        kernelSpec: {
-                            argv: [
-                                pythonBin,
-                                '-m',
-                                'positron_stata_kernel',
-                                '-f',
-                                '{connection_file}'
-                            ],
-                            display_name: 'OpenStata (Rust Engine)',
-                            language: 'stata',
-                            interrupt_mode: 'message',
-                            kernel_protocol_version: '5.3',
-                            env: envVars
-                        }
-                    }
-                };
-                this._discoveredRuntimes.set(metadata.runtimeId, metadata);
-                this._discoveredRuntimeCount++;
-                yield metadata;
             }
         } finally {
             this._discoveryComplete = true;
@@ -362,15 +311,10 @@ export class StataRuntimeManager implements positron.LanguageRuntimeManager {
     }
 
     async recommendedWorkspaceRuntime(): Promise<positron.LanguageRuntimeMetadata | undefined> {
-        // 1. Prefer any discovered official Stata installation
         for (const [id, meta] of this._discoveredRuntimes.entries()) {
             if (id.startsWith('stata-')) {
                 return meta;
             }
-        }
-        // 2. Fall back to OpenStata if present
-        if (this._discoveredRuntimes.has('open-stata-rust')) {
-            return this._discoveredRuntimes.get('open-stata-rust');
         }
         return undefined;
     }

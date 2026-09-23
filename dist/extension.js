@@ -37,238 +37,13 @@ var vscode3 = __toESM(require("vscode"));
 var positron2 = __toESM(require("positron"));
 
 // src/runtimeManager.ts
-var vscode2 = __toESM(require("vscode"));
-var positron = __toESM(require("positron"));
-var fs2 = __toESM(require("fs"));
-var path2 = __toESM(require("path"));
-
-// src/dtaEditorProvider.ts
 var vscode = __toESM(require("vscode"));
-var path = __toESM(require("path"));
+var positron = __toESM(require("positron"));
 var fs = __toESM(require("fs"));
-var os = __toESM(require("os"));
-var crypto = __toESM(require("crypto"));
-var import_child_process = require("child_process");
-function getOpenStataExecutable() {
-  const configPath = vscode.workspace.getConfiguration("positron-stata").get("openStataPath");
-  if (configPath && fs.existsSync(configPath)) {
-    return configPath;
-  }
-  const envBin = process.env["OPENSTATA_BIN"];
-  if (envBin && fs.existsSync(envBin)) {
-    return envBin;
-  }
-  const binName = process.platform === "win32" ? "open-stata.exe" : "open-stata";
-  const candidates = [
-    path.join(os.homedir(), ".cargo", "bin", binName),
-    path.join(os.homedir(), ".local", "bin", binName),
-    path.join("/usr", "local", "bin", binName),
-    path.join("/usr", "bin", binName),
-    path.join("/home", "linuxbrew", ".linuxbrew", "bin", binName),
-    path.join("/opt", "homebrew", "bin", binName)
-  ];
-  for (const p of candidates) {
-    if (fs.existsSync(p)) {
-      return p;
-    }
-  }
-  const envPath = process.env["PATH"] || "";
-  for (const dir of envPath.split(path.delimiter)) {
-    if (!dir) continue;
-    const candidate = path.join(dir, binName);
-    if (fs.existsSync(candidate)) {
-      return candidate;
-    }
-  }
-  return void 0;
-}
+var path = __toESM(require("path"));
 function getPythonExecutable() {
-  const candidates = [
-    "/home/linuxbrew/.linuxbrew/bin/python3",
-    "/usr/local/bin/python3",
-    "/usr/bin/python3",
-    "python3"
-  ];
-  for (const p of candidates) {
-    if (fs.existsSync(p)) {
-      return p;
-    }
-  }
-  return "python3";
-}
-function convertWithOpenStata(openStataBin, filePath, cachedParquetPath) {
-  return new Promise((resolve, reject) => {
-    (0, import_child_process.execFile)(openStataBin, ["convert", filePath, cachedParquetPath], (err, _stdout, stderr) => {
-      if (!err) {
-        return resolve();
-      }
-      const isSubcommandError = stderr && (stderr.includes("unrecognized subcommand") || stderr.includes("unexpected argument") || stderr.includes("Found argument 'convert' which wasn't expected"));
-      if (isSubcommandError) {
-        (0, import_child_process.execFile)(
-          openStataBin,
-          ["-c", `use \`"${filePath}"', clear; save \`"${cachedParquetPath}"', replace`],
-          (err2, _stdout2, stderr2) => {
-            if (!err2) {
-              return resolve();
-            }
-            reject(new Error(stderr2 || stderr || err2.message || err.message));
-          }
-        );
-      } else {
-        reject(new Error(stderr || err.message));
-      }
-    });
-  });
-}
-function convertWithFallback(filePath, cachedParquetPath) {
-  const pythonBin = getPythonExecutable();
-  const pythonScript = `
-import sys
-
-src = sys.argv[1]
-dst = sys.argv[2]
-
-try:
-    import pandas as pd
-    df = pd.read_stata(src)
-    df.to_parquet(dst, index=False)
-except Exception as e_pandas:
-    try:
-        import pyreadstat
-        df, _ = pyreadstat.read_dta(src)
-        df.to_parquet(dst, index=False)
-    except Exception as e_readstat:
-        sys.stderr.write(f"Pandas failed: {e_pandas}\\npyreadstat failed: {e_readstat}\\n")
-        sys.exit(1)
-`;
-  return new Promise((resolve, reject) => {
-    (0, import_child_process.execFile)(pythonBin, ["-c", pythonScript, filePath, cachedParquetPath], (err, _stdout, stderr) => {
-      if (err) {
-        reject(new Error(stderr || err.message));
-      } else {
-        resolve();
-      }
-    });
-  });
-}
-async function openDtaInNativeDataExplorer(dtaUri, _context) {
-  const filePath = dtaUri.fsPath;
-  const fileName = path.basename(filePath);
-  const hash = crypto.createHash("md5").update(filePath).digest("hex").substring(0, 8);
-  const datasetDir = path.join(os.tmpdir(), "positron-stata-cache", hash);
-  if (!fs.existsSync(datasetDir)) {
-    fs.mkdirSync(datasetDir, { recursive: true });
-  }
-  const baseName = path.parse(filePath).name;
-  const cachedParquetPath = path.join(datasetDir, `${baseName}.parquet`);
-  let needsConvert = true;
-  if (fs.existsSync(cachedParquetPath)) {
-    try {
-      const dtaStat = fs.statSync(filePath);
-      const parquetStat = fs.statSync(cachedParquetPath);
-      if (parquetStat.size > 0 && parquetStat.mtimeMs >= dtaStat.mtimeMs) {
-        needsConvert = false;
-      }
-    } catch {
-      needsConvert = true;
-    }
-  }
-  if (needsConvert) {
-    const openStataBin = getOpenStataExecutable();
-    let converted = false;
-    let lastError;
-    if (openStataBin) {
-      try {
-        await convertWithOpenStata(openStataBin, filePath, cachedParquetPath);
-        converted = true;
-      } catch (err) {
-        console.warn("Native open-stata conversion failed, attempting fallback:", err);
-        lastError = err;
-      }
-    }
-    if (!converted) {
-      try {
-        await convertWithFallback(filePath, cachedParquetPath);
-        converted = true;
-      } catch (err) {
-        if (fs.existsSync(cachedParquetPath)) {
-          try {
-            fs.unlinkSync(cachedParquetPath);
-          } catch {
-          }
-        }
-        const cause = lastError ? ` (open-stata failed: ${lastError.message}; fallback failed: ${err.message})` : `: ${err.message}`;
-        throw new Error(`Failed to convert .dta to parquet${cause}`);
-      }
-    }
-  }
-  const parquetUri = vscode.Uri.file(cachedParquetPath);
-  try {
-    await vscode.commands.executeCommand(
-      "vscode.openWith",
-      parquetUri,
-      "workbench.editor.positronDataExplorer"
-    );
-  } catch {
-    await vscode.commands.executeCommand("vscode.open", parquetUri);
-  }
-}
-var DtaCustomEditorProvider = class _DtaCustomEditorProvider {
-  constructor(context) {
-    this.context = context;
-  }
-  context;
-  static viewType = "positron-stata.dtaViewer";
-  static register(context) {
-    const provider = new _DtaCustomEditorProvider(context);
-    return vscode.window.registerCustomEditorProvider(
-      _DtaCustomEditorProvider.viewType,
-      provider,
-      {
-        webviewOptions: { retainContextWhenHidden: false },
-        supportsMultipleEditorsPerDocument: false
-      }
-    );
-  }
-  async openCustomDocument(uri) {
-    return { uri, dispose: () => {
-    } };
-  }
-  async resolveCustomEditor(document, webviewPanel, _token) {
-    const fileName = path.basename(document.uri.fsPath);
-    webviewPanel.webview.html = `<!DOCTYPE html>
-<html>
-<body style="display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:system-ui,-apple-system,sans-serif;color:#888;background:#1e1e1e;">
-    <div style="text-align:center;">
-        <div style="font-size:24px;margin-bottom:8px;">\u{1F4CA}</div>
-        <div>Opening <strong>${fileName}</strong> in Positron Data Explorer...</div>
-    </div>
-</body>
-</html>`;
-    try {
-      await openDtaInNativeDataExplorer(document.uri, this.context);
-      setTimeout(() => {
-        try {
-          webviewPanel.dispose();
-        } catch {
-        }
-      }, 300);
-    } catch (err) {
-      webviewPanel.webview.html = `<!DOCTYPE html>
-<html>
-<body style="padding:24px;font-family:sans-serif;color:#f87171;background:#1e1e1e;">
-    <h3>Failed to open ${fileName} in Data Explorer</h3>
-    <pre>${err.message}</pre>
-</body>
-</html>`;
-    }
-  }
-};
-
-// src/runtimeManager.ts
-function getPythonExecutable2() {
-  const configPython = vscode2.workspace.getConfiguration("positron-stata").get("pythonPath");
-  if (configPython && fs2.existsSync(configPython)) {
+  const configPython = vscode.workspace.getConfiguration("positron-stata").get("pythonPath");
+  if (configPython && fs.existsSync(configPython)) {
     return configPython;
   }
   const candidates = [
@@ -279,26 +54,26 @@ function getPythonExecutable2() {
     "python3"
   ];
   for (const p of candidates) {
-    if (p === "python3" || fs2.existsSync(p)) {
+    if (p === "python3" || fs.existsSync(p)) {
       return p;
     }
   }
   return "python3";
 }
 function getPositronPythonFilesPath() {
-  if (vscode2.env.appRoot) {
-    const candidate = path2.join(vscode2.env.appRoot, "extensions", "positron-python", "python_files", "posit");
-    if (fs2.existsSync(candidate)) {
+  if (vscode.env.appRoot) {
+    const candidate = path.join(vscode.env.appRoot, "extensions", "positron-python", "python_files", "posit");
+    if (fs.existsSync(candidate)) {
       return candidate;
     }
   }
   const fallbacks = [
     "/usr/share/positron/resources/app/extensions/positron-python/python_files/posit",
     "/Applications/Positron.app/Contents/Resources/app/extensions/positron-python/python_files/posit",
-    path2.join(process.env["LOCALAPPDATA"] || "", "Programs", "Positron", "resources", "app", "extensions", "positron-python", "python_files", "posit")
+    path.join(process.env["LOCALAPPDATA"] || "", "Programs", "Positron", "resources", "app", "extensions", "positron-python", "python_files", "posit")
   ];
   for (const fb of fallbacks) {
-    if (fb && fs2.existsSync(fb)) {
+    if (fb && fs.existsSync(fb)) {
       return fb;
     }
   }
@@ -311,7 +86,7 @@ function findStataInstallations() {
     const key = `${homeDir}:${exePath}`;
     if (seen.has(key)) return;
     seen.add(key);
-    const exeLower = path2.basename(exePath).toLowerCase();
+    const exeLower = path.basename(exePath).toLowerCase();
     let edition = editionHint || "be";
     if (exeLower.includes("mp")) {
       edition = "mp";
@@ -338,9 +113,9 @@ function findStataInstallations() {
       source: `System (${homeDir})`
     });
   };
-  const configHome = vscode2.workspace.getConfiguration("positron-stata").get("stataHome");
-  const configEdition = vscode2.workspace.getConfiguration("positron-stata").get("stataEdition");
-  if (configHome && fs2.existsSync(configHome)) {
+  const configHome = vscode.workspace.getConfiguration("positron-stata").get("stataHome");
+  const configEdition = vscode.workspace.getConfiguration("positron-stata").get("stataEdition");
+  if (configHome && fs.existsSync(configHome)) {
     const candidateBins = [
       "stata-mp",
       "stata-se",
@@ -354,8 +129,8 @@ function findStataInstallations() {
     ];
     let foundBin;
     for (const b of candidateBins) {
-      const full = path2.join(configHome, b);
-      if (fs2.existsSync(full)) {
+      const full = path.join(configHome, b);
+      if (fs.existsSync(full)) {
         foundBin = full;
         break;
       }
@@ -373,11 +148,11 @@ function findStataInstallations() {
     "/opt/stata"
   ];
   for (const dir of linuxDirs) {
-    if (!fs2.existsSync(dir)) continue;
+    if (!fs.existsSync(dir)) continue;
     const bins = ["stata-mp", "stata-se", "stata"];
     for (const b of bins) {
-      const p = path2.join(dir, b);
-      if (fs2.existsSync(p)) {
+      const p = path.join(dir, b);
+      if (fs.existsSync(p)) {
         addInstallation(dir, p);
         break;
       }
@@ -396,19 +171,19 @@ function findStataInstallations() {
     "/Applications/Stata"
   ];
   for (const base of macBaseDirs) {
-    if (!fs2.existsSync(base)) continue;
+    if (!fs.existsSync(base)) continue;
     const appEditions = [
       ["StataMP.app", "mp"],
       ["StataSE.app", "se"],
       ["Stata.app", "be"]
     ];
     for (const [app, ed] of appEditions) {
-      const cliPath = path2.join(base, app, "Contents", "MacOS", `stata-${ed}`);
-      const guiPath = path2.join(base, app, "Contents", "MacOS", app.replace(".app", ""));
-      if (fs2.existsSync(cliPath)) {
+      const cliPath = path.join(base, app, "Contents", "MacOS", `stata-${ed}`);
+      const guiPath = path.join(base, app, "Contents", "MacOS", app.replace(".app", ""));
+      if (fs.existsSync(cliPath)) {
         addInstallation(base, cliPath, void 0, ed);
         break;
-      } else if (fs2.existsSync(guiPath)) {
+      } else if (fs.existsSync(guiPath)) {
         addInstallation(base, guiPath, void 0, ed);
         break;
       }
@@ -423,8 +198,8 @@ function findStataInstallations() {
   for (const pf of progFiles) {
     const winDirs = ["StataNow19", "Stata19", "Stata18", "Stata17", "Stata"];
     for (const wd of winDirs) {
-      const dir = path2.join(pf, wd);
-      if (!fs2.existsSync(dir)) continue;
+      const dir = path.join(pf, wd);
+      if (!fs.existsSync(dir)) continue;
       const bins = [
         ["StataMP-64.exe", "mp"],
         ["StataSE-64.exe", "se"],
@@ -434,8 +209,8 @@ function findStataInstallations() {
         ["Stata.exe", "be"]
       ];
       for (const [b, ed] of bins) {
-        const full = path2.join(dir, b);
-        if (fs2.existsSync(full)) {
+        const full = path.join(dir, b);
+        if (fs.existsSync(full)) {
           addInstallation(dir, full, void 0, ed);
           break;
         }
@@ -444,12 +219,12 @@ function findStataInstallations() {
   }
   const envPath = process.env["PATH"] || "";
   const pathBins = ["stata-mp", "stata-se", "stata"];
-  for (const dir of envPath.split(path2.delimiter)) {
+  for (const dir of envPath.split(path.delimiter)) {
     if (!dir) continue;
     for (const b of pathBins) {
-      const full = path2.join(dir, b);
-      if (fs2.existsSync(full)) {
-        const homeDir = path2.dirname(dir);
+      const full = path.join(dir, b);
+      if (fs.existsSync(full)) {
+        const homeDir = path.dirname(dir);
         addInstallation(homeDir, full);
       }
     }
@@ -465,9 +240,9 @@ var StataRuntimeManager = class {
   context;
   _discoveredRuntimes = /* @__PURE__ */ new Map();
   onDidDiscoverRuntime;
-  _discoverEmitter = new vscode2.EventEmitter();
+  _discoverEmitter = new vscode.EventEmitter();
   onDidCompleteDiscovery;
-  _completeEmitter = new vscode2.EventEmitter();
+  _completeEmitter = new vscode.EventEmitter();
   _discoveryComplete = false;
   _discoveredRuntimeCount = 0;
   alwaysRediscover = true;
@@ -479,8 +254,8 @@ var StataRuntimeManager = class {
   }
   async *discoverAllRuntimes() {
     try {
-      const pythonBin = getPythonExecutable2();
-      const kernelPythonPath = path2.join(this.context.extensionPath, "kernel");
+      const pythonBin = getPythonExecutable();
+      const kernelPythonPath = path.join(this.context.extensionPath, "kernel");
       const positronPythonFiles = getPositronPythonFilesPath();
       const stataInstalls = findStataInstallations();
       for (const inst of stataInstalls) {
@@ -528,52 +303,6 @@ var StataRuntimeManager = class {
         };
         this._discoveredRuntimes.set(metadata.runtimeId, metadata);
         this._discoveredRuntimeCount++;
-        yield metadata;
-      }
-      const foundOpenStata = getOpenStataExecutable();
-      if (foundOpenStata) {
-        const envVars = {
-          PYTHONPATH: kernelPythonPath,
-          POSITRON_STATA_ENGINE: "openstata",
-          OPENSTATA_BIN: foundOpenStata
-        };
-        if (positronPythonFiles) {
-          envVars["POSITRON_PYTHON_FILES"] = positronPythonFiles;
-        }
-        const metadata = {
-          runtimeId: "open-stata-rust",
-          runtimeName: "OpenStata (Rust Engine)",
-          runtimeShortName: "OpenStata",
-          runtimeVersion: "0.1.0",
-          runtimeSource: "Open Source (Rust)",
-          languageName: "Stata",
-          languageId: "stata",
-          languageVersion: "19.5",
-          runtimePath: foundOpenStata,
-          base64EncodedIconSvg: void 0,
-          startupBehavior: positron.LanguageRuntimeStartupBehavior.StartOnDemand,
-          sessionLocation: positron.LanguageRuntimeSessionLocation.Local,
-          extraRuntimeData: {
-            engine: "openstata",
-            kernelSpec: {
-              argv: [
-                pythonBin,
-                "-m",
-                "positron_stata_kernel",
-                "-f",
-                "{connection_file}"
-              ],
-              display_name: "OpenStata (Rust Engine)",
-              language: "stata",
-              interrupt_mode: "message",
-              kernel_protocol_version: "5.3",
-              env: envVars
-            }
-          }
-        };
-        this._discoveredRuntimes.set(metadata.runtimeId, metadata);
-        this._discoveredRuntimeCount++;
-        yield metadata;
       }
     } finally {
       this._discoveryComplete = true;
@@ -586,13 +315,10 @@ var StataRuntimeManager = class {
         return meta;
       }
     }
-    if (this._discoveredRuntimes.has("open-stata-rust")) {
-      return this._discoveredRuntimes.get("open-stata-rust");
-    }
     return void 0;
   }
   async createSession(runtimeMetadata, sessionMetadata) {
-    const supervisorExt = vscode2.extensions.getExtension("positron.positron-supervisor");
+    const supervisorExt = vscode.extensions.getExtension("positron.positron-supervisor");
     if (!supervisorExt) {
       throw new Error("positron-supervisor extension is required to launch Stata sessions.");
     }
@@ -620,6 +346,161 @@ var StataRuntimeManager = class {
       kernelSpec,
       dynState
     );
+  }
+};
+
+// src/dtaEditorProvider.ts
+var vscode2 = __toESM(require("vscode"));
+var path2 = __toESM(require("path"));
+var fs2 = __toESM(require("fs"));
+var os = __toESM(require("os"));
+var crypto = __toESM(require("crypto"));
+var import_child_process = require("child_process");
+function getPythonExecutable2() {
+  const configPython = vscode2.workspace.getConfiguration("positron-stata").get("pythonPath");
+  if (configPython && fs2.existsSync(configPython)) {
+    return configPython;
+  }
+  const candidates = [
+    "/home/linuxbrew/.linuxbrew/bin/python3",
+    "/usr/local/bin/python3",
+    "/opt/homebrew/bin/python3",
+    "/usr/bin/python3",
+    "python3"
+  ];
+  for (const p of candidates) {
+    if (p === "python3" || fs2.existsSync(p)) {
+      return p;
+    }
+  }
+  return "python3";
+}
+function convertDtaToParquet(filePath, cachedParquetPath) {
+  const pythonBin = getPythonExecutable2();
+  const pythonScript = `
+import sys
+
+src = sys.argv[1]
+dst = sys.argv[2]
+
+try:
+    import pandas as pd
+    df = pd.read_stata(src)
+    df.to_parquet(dst, index=False)
+except Exception as e_pandas:
+    try:
+        import pyreadstat
+        df, _ = pyreadstat.read_dta(src)
+        df.to_parquet(dst, index=False)
+    except Exception as e_readstat:
+        sys.stderr.write(f"Pandas error: {e_pandas}\\npyreadstat error: {e_readstat}\\n")
+        sys.exit(1)
+`;
+  return new Promise((resolve, reject) => {
+    (0, import_child_process.execFile)(pythonBin, ["-c", pythonScript, filePath, cachedParquetPath], (err, _stdout, stderr) => {
+      if (err) {
+        reject(new Error(stderr || err.message));
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+async function openDtaInNativeDataExplorer(dtaUri, _context) {
+  const filePath = dtaUri.fsPath;
+  const fileName = path2.basename(filePath);
+  const hash = crypto.createHash("md5").update(filePath).digest("hex").substring(0, 8);
+  const datasetDir = path2.join(os.tmpdir(), "positron-stata-cache", hash);
+  if (!fs2.existsSync(datasetDir)) {
+    fs2.mkdirSync(datasetDir, { recursive: true });
+  }
+  const baseName = path2.parse(filePath).name;
+  const cachedParquetPath = path2.join(datasetDir, `${baseName}.parquet`);
+  let needsConvert = true;
+  if (fs2.existsSync(cachedParquetPath)) {
+    try {
+      const dtaStat = fs2.statSync(filePath);
+      const parquetStat = fs2.statSync(cachedParquetPath);
+      if (parquetStat.size > 0 && parquetStat.mtimeMs >= dtaStat.mtimeMs) {
+        needsConvert = false;
+      }
+    } catch {
+      needsConvert = true;
+    }
+  }
+  if (needsConvert) {
+    try {
+      await convertDtaToParquet(filePath, cachedParquetPath);
+    } catch (err) {
+      if (fs2.existsSync(cachedParquetPath)) {
+        try {
+          fs2.unlinkSync(cachedParquetPath);
+        } catch {
+        }
+      }
+      throw new Error(`Failed to convert .dta file for Data Explorer: ${err.message}`);
+    }
+  }
+  const parquetUri = vscode2.Uri.file(cachedParquetPath);
+  try {
+    await vscode2.commands.executeCommand(
+      "vscode.openWith",
+      parquetUri,
+      "workbench.editor.positronDataExplorer"
+    );
+  } catch {
+    await vscode2.commands.executeCommand("vscode.open", parquetUri);
+  }
+}
+var DtaCustomEditorProvider = class _DtaCustomEditorProvider {
+  constructor(context) {
+    this.context = context;
+  }
+  context;
+  static viewType = "positron-stata.dtaViewer";
+  static register(context) {
+    const provider = new _DtaCustomEditorProvider(context);
+    return vscode2.window.registerCustomEditorProvider(
+      _DtaCustomEditorProvider.viewType,
+      provider,
+      {
+        webviewOptions: { retainContextWhenHidden: false },
+        supportsMultipleEditorsPerDocument: false
+      }
+    );
+  }
+  async openCustomDocument(uri) {
+    return { uri, dispose: () => {
+    } };
+  }
+  async resolveCustomEditor(document, webviewPanel, _token) {
+    const fileName = path2.basename(document.uri.fsPath);
+    webviewPanel.webview.html = `<!DOCTYPE html>
+<html>
+<body style="display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:system-ui,-apple-system,sans-serif;color:#888;background:#1e1e1e;">
+    <div style="text-align:center;">
+        <div style="font-size:24px;margin-bottom:8px;">\u{1F4CA}</div>
+        <div>Opening <strong>${fileName}</strong> in Positron Data Explorer...</div>
+    </div>
+</body>
+</html>`;
+    try {
+      await openDtaInNativeDataExplorer(document.uri, this.context);
+      setTimeout(() => {
+        try {
+          webviewPanel.dispose();
+        } catch {
+        }
+      }, 300);
+    } catch (err) {
+      webviewPanel.webview.html = `<!DOCTYPE html>
+<html>
+<body style="padding:24px;font-family:sans-serif;color:#f87171;background:#1e1e1e;">
+    <h3>Failed to open ${fileName} in Data Explorer</h3>
+    <pre>${err.message}</pre>
+</body>
+</html>`;
+    }
   }
 };
 
@@ -656,32 +537,6 @@ function activate(context) {
   context.subscriptions.push(
     vscode3.commands.registerCommand("stata.openDataExplorer", async () => {
       await positron2.runtime.executeCode("stata", "browse\n", false, true);
-    })
-  );
-  context.subscriptions.push(
-    vscode3.commands.registerCommand("stata.selectEngine", async () => {
-      const options = [
-        {
-          label: "Stata (Official)",
-          description: "In-process execution via licensed Stata installation"
-        }
-      ];
-      const openStataBin = getOpenStataExecutable();
-      if (openStataBin) {
-        options.push({
-          label: "OpenStata (Rust Engine)",
-          description: "Standalone open-source Rust engine"
-        });
-      }
-      const selected = await vscode3.window.showQuickPick(options, {
-        placeHolder: "Select active Stata engine for console"
-      });
-      if (selected) {
-        const engine = selected.label.includes("OpenStata") ? "openstata" : "stata";
-        await positron2.runtime.executeCode("stata", `%engine ${engine}
-`, false, true);
-        vscode3.window.showInformationMessage(`Switched Stata engine to: ${selected.label}`);
-      }
     })
   );
   context.subscriptions.push(

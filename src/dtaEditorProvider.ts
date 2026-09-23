@@ -5,57 +5,21 @@ import * as os from 'os';
 import * as crypto from 'crypto';
 import { execFile } from 'child_process';
 
-export function getOpenStataExecutable(): string | undefined {
-    // 1. User configuration
-    const configPath = vscode.workspace.getConfiguration('positron-stata').get<string>('openStataPath');
-    if (configPath && fs.existsSync(configPath)) {
-        return configPath;
-    }
-
-    // 2. Environment variable
-    const envBin = process.env['OPENSTATA_BIN'];
-    if (envBin && fs.existsSync(envBin)) {
-        return envBin;
-    }
-
-    // 3. Standard installation locations
-    const binName = process.platform === 'win32' ? 'open-stata.exe' : 'open-stata';
-    const candidates = [
-        path.join(os.homedir(), '.cargo', 'bin', binName),
-        path.join(os.homedir(), '.local', 'bin', binName),
-        path.join('/usr', 'local', 'bin', binName),
-        path.join('/usr', 'bin', binName),
-        path.join('/home', 'linuxbrew', '.linuxbrew', 'bin', binName),
-        path.join('/opt', 'homebrew', 'bin', binName)
-    ];
-    for (const p of candidates) {
-        if (fs.existsSync(p)) {
-            return p;
-        }
-    }
-
-    // 4. Scan PATH environment variable
-    const envPath = process.env['PATH'] || '';
-    for (const dir of envPath.split(path.delimiter)) {
-        if (!dir) continue;
-        const candidate = path.join(dir, binName);
-        if (fs.existsSync(candidate)) {
-            return candidate;
-        }
-    }
-
-    return undefined;
-}
-
 function getPythonExecutable(): string {
+    const configPython = vscode.workspace.getConfiguration('positron-stata').get<string>('pythonPath');
+    if (configPython && fs.existsSync(configPython)) {
+        return configPython;
+    }
+
     const candidates = [
         '/home/linuxbrew/.linuxbrew/bin/python3',
         '/usr/local/bin/python3',
+        '/opt/homebrew/bin/python3',
         '/usr/bin/python3',
         'python3'
     ];
     for (const p of candidates) {
-        if (fs.existsSync(p)) {
+        if (p === 'python3' || fs.existsSync(p)) {
             return p;
         }
     }
@@ -63,45 +27,9 @@ function getPythonExecutable(): string {
 }
 
 /**
- * Converts a .dta file to parquet using the native open-stata Rust binary.
+ * Converts a .dta file to parquet using Python (pandas or pyreadstat).
  */
-function convertWithOpenStata(openStataBin: string, filePath: string, cachedParquetPath: string): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-        // Fast path: direct convert command
-        execFile(openStataBin, ['convert', filePath, cachedParquetPath], (err, _stdout, stderr) => {
-            if (!err) {
-                return resolve();
-            }
-
-            // Fallback command: headless Stata script command only if subcommand was unrecognized
-            const isSubcommandError = stderr && (
-                stderr.includes('unrecognized subcommand') ||
-                stderr.includes('unexpected argument') ||
-                stderr.includes("Found argument 'convert' which wasn't expected")
-            );
-
-            if (isSubcommandError) {
-                execFile(
-                    openStataBin,
-                    ['-c', `use \`"${filePath}"', clear; save \`"${cachedParquetPath}"', replace`],
-                    (err2, _stdout2, stderr2) => {
-                        if (!err2) {
-                            return resolve();
-                        }
-                        reject(new Error(stderr2 || stderr || err2.message || err.message));
-                    }
-                );
-            } else {
-                reject(new Error(stderr || err.message));
-            }
-        });
-    });
-}
-
-/**
- * Fallback converter using Python (pandas or pyreadstat).
- */
-function convertWithFallback(filePath: string, cachedParquetPath: string): Promise<void> {
+function convertDtaToParquet(filePath: string, cachedParquetPath: string): Promise<void> {
     const pythonBin = getPythonExecutable();
     const pythonScript = `
 import sys
@@ -119,7 +47,7 @@ except Exception as e_pandas:
         df, _ = pyreadstat.read_dta(src)
         df.to_parquet(dst, index=False)
     except Exception as e_readstat:
-        sys.stderr.write(f"Pandas failed: {e_pandas}\\npyreadstat failed: {e_readstat}\\n")
+        sys.stderr.write(f"Pandas error: {e_pandas}\\npyreadstat error: {e_readstat}\\n")
         sys.exit(1)
 `;
     return new Promise<void>((resolve, reject) => {
@@ -164,36 +92,15 @@ export async function openDtaInNativeDataExplorer(dtaUri: vscode.Uri, _context?:
     }
 
     if (needsConvert) {
-        const openStataBin = getOpenStataExecutable();
-        let converted = false;
-        let lastError: Error | undefined;
-
-        if (openStataBin) {
-            try {
-                await convertWithOpenStata(openStataBin, filePath, cachedParquetPath);
-                converted = true;
-            } catch (err: any) {
-                console.warn('Native open-stata conversion failed, attempting fallback:', err);
-                lastError = err;
+        try {
+            await convertDtaToParquet(filePath, cachedParquetPath);
+        } catch (err: any) {
+            if (fs.existsSync(cachedParquetPath)) {
+                try {
+                    fs.unlinkSync(cachedParquetPath);
+                } catch {}
             }
-        }
-
-        if (!converted) {
-            try {
-                await convertWithFallback(filePath, cachedParquetPath);
-                converted = true;
-            } catch (err: any) {
-                // Clean up partial/corrupted parquet file if left behind
-                if (fs.existsSync(cachedParquetPath)) {
-                    try {
-                        fs.unlinkSync(cachedParquetPath);
-                    } catch {}
-                }
-                const cause = lastError
-                    ? ` (open-stata failed: ${lastError.message}; fallback failed: ${err.message})`
-                    : `: ${err.message}`;
-                throw new Error(`Failed to convert .dta to parquet${cause}`);
-            }
+            throw new Error(`Failed to convert .dta file for Data Explorer: ${err.message}`);
         }
     }
 
@@ -250,7 +157,6 @@ export class DtaCustomEditorProvider implements vscode.CustomReadonlyEditorProvi
 
         try {
             await openDtaInNativeDataExplorer(document.uri, this.context);
-            // Delay disposal slightly to allow Positron to attach the Data Explorer editor tab seamlessly
             setTimeout(() => {
                 try {
                     webviewPanel.dispose();

@@ -1,7 +1,7 @@
 {
   "name": "positron-stata",
   "displayName": "Stata Support for Positron",
-  "description": "First-class Stata and OpenStata support for Positron IDE with native Variables, Data Explorer, Plots, and .dta support.",
+  "description": "First-class Stata support for Positron IDE with native Variables, Data Explorer, Plots, and .dta support.",
   "version": "0.1.0",
   "publisher": "abhinav",
   "license": "MIT",
@@ -16,7 +16,6 @@
   },
   "keywords": [
     "stata",
-    "open-stata",
     "econometrics",
     "statistics",
     "data-science",
@@ -84,11 +83,6 @@
           "type": "string",
           "default": "",
           "description": "Path to the Python interpreter with PyStata installed. If blank, automatically detected from PATH or virtual environments."
-        },
-        "positron-stata.openStataPath": {
-          "type": "string",
-          "default": "",
-          "description": "Optional path to the open-stata binary executable for open-source Stata execution or fast .dta conversion."
         }
       }
     },
@@ -121,11 +115,6 @@
       {
         "command": "stata.openDataExplorer",
         "title": "Open Current Dataset in Data Explorer",
-        "category": "Stata"
-      },
-      {
-        "command": "stata.selectEngine",
-        "title": "Select Stata Engine (Stata 19 MP / OpenStata)",
         "category": "Stata"
       },
       {

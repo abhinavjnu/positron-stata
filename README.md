@@ -28,8 +28,6 @@ First-class Stata language runtime and interactive development environment for *
 - **Console & Do-File Execution**:
   - `Ctrl+Enter` (`Cmd+Enter` on macOS) to execute selected code or current line.
   - `Ctrl+Shift+D` (`Cmd+Shift+D` on macOS) to run the entire `.do` file.
-- **Decoupled Architecture & Optional OpenStata**:
-  - Designed from the ground up to be standalone. If OpenStata is present, it is also discovered as an optional alternative engine.
 
 ---
 
@@ -73,7 +71,6 @@ Open your Positron Settings (`Ctrl+,` or `Cmd+,`) and navigate to **Extensions â
 | `positron-stata.stataHome` | `string` | `""` | Path to your Stata installation directory. If blank, automatically discovered. |
 | `positron-stata.stataEdition` | `string` | `"auto"` | Stata edition (`auto`, `mp`, `se`, `be`). Auto-detects MP > SE > BE. |
 | `positron-stata.pythonPath` | `string` | `""` | Path to Python interpreter with PyStata. If blank, auto-detected from environment. |
-| `positron-stata.openStataPath` | `string` | `""` | Optional path to `open-stata` binary for open-source execution. |
 
 ### Default Discovery Paths
 

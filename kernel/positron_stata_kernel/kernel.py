@@ -1,5 +1,5 @@
 """
-PositronStataKernel: First-class Jupyter Kernel for Stata & OpenStata in Positron.
+PositronStataKernel: First-class Jupyter Kernel for Stata in Positron.
 Handles execution, streaming output, plots, Variables pane comms, UI/Help comms, and Data Explorer comms.
 """
 
@@ -18,7 +18,6 @@ from positron.data_explorer import DataExplorerService
 from positron.utils import BackgroundJobQueue
 
 from .stata_engine import StataEngine
-from .openstata_engine import OpenStataEngine
 from .variables_handler import StataVariablesHandler
 from .ui_handler import StataUiHandler
 from .help_handler import StataHelpHandler
@@ -40,7 +39,7 @@ class PositronStataKernel(Kernel):
             "continuation_prompt": "> ",
         },
     }
-    banner = "Positron Stata Kernel (Stata 19 MP & OpenStata)"
+    banner = "Positron Stata Kernel"
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -57,18 +56,12 @@ class PositronStataKernel(Kernel):
         for msg_type in comm_msg_types:
             self.shell_handlers[msg_type] = getattr(self.comm_manager, msg_type)
 
-        # Select engine based on environment variable (default: stata)
-        engine_type = os.environ.get("POSITRON_STATA_ENGINE", "stata").lower()
-        if engine_type == "openstata":
-            bin_path = os.environ.get("OPENSTATA_BIN")
-            self.engine = OpenStataEngine(binary_path=bin_path)
-            self.banner = "Positron OpenStata Kernel (Rust Engine)"
-        else:
-            stata_home = os.environ.get("STATA_HOME", "/usr/local/stata19")
-            edition = os.environ.get("STATA_EDITION", "mp")
-            version = os.environ.get("STATA_VERSION", "19")
-            self.engine = StataEngine(stata_home=stata_home, edition=edition)
-            self.banner = f"Positron Stata Kernel (Stata {version} {edition.upper()})"
+        # Initialize Stata Engine
+        stata_home = os.environ.get("STATA_HOME", "/usr/local/stata19")
+        edition = os.environ.get("STATA_EDITION", "mp")
+        version = os.environ.get("STATA_VERSION", "19")
+        self.engine = StataEngine(stata_home=stata_home, edition=edition)
+        self.banner = f"Positron Stata Kernel (Stata {version} {edition.upper()})"
 
         # Initialize Positron services
         self.job_queue = BackgroundJobQueue()
@@ -104,22 +97,6 @@ class PositronStataKernel(Kernel):
                 "user_expressions": {},
             }
 
-        # Handle special internal commands
-        if code_trimmed.lower().startswith("%engine "):
-            new_engine = code_trimmed.split(maxsplit=1)[1].strip().lower()
-            if new_engine == "openstata":
-                self.engine = OpenStataEngine()
-                self._send_stdout("Switched to OpenStata (Rust) engine.\n")
-            else:
-                self.engine = StataEngine()
-                self._send_stdout("Switched to Stata 19 MP (Official) engine.\n")
-            self.variables_handler.send_refresh_event()
-            return {
-                "status": "ok",
-                "execution_count": self.execution_count,
-                "payload": [],
-                "user_expressions": {},
-            }
 
         # Handle help commands directly
         if code_trimmed.lower().startswith("help "):
