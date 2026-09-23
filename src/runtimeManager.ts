@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as positron from 'positron';
 import * as fs from 'fs';
 import * as path from 'path';
+import { StataInstallation, findStataInstallations as scanForStata, parseEdition, resolvePythonExecutable } from './discovery';
 
 interface SupervisorApi {
     createSession(
@@ -19,51 +20,36 @@ interface SupervisorApi {
     ): Promise<positron.LanguageRuntimeSession>;
 }
 
-interface StataInstallation {
-    homeDir: string;
-    executable: string;
-    version: string;
-    edition: 'mp' | 'se' | 'be';
-    displayName: string;
-    shortName: string;
-    source: string;
+export function getPythonExecutable(): string {
+    return resolvePythonExecutable({
+        platform: process.platform,
+        env: process.env,
+        exists: fs.existsSync,
+        listDir: fs.readdirSync,
+        configured: vscode.workspace.getConfiguration('positron-stata').get<string>('pythonPath')
+    });
 }
 
-export function getPythonExecutable(): string {
-    // 1. User configured python
-    const configPython = vscode.workspace.getConfiguration('positron-stata').get<string>('pythonPath');
-    if (configPython && fs.existsSync(configPython)) {
-        return configPython;
-    }
+function findStataInstallations(): StataInstallation[] {
+    const config = vscode.workspace.getConfiguration('positron-stata');
+    return scanForStata({
+        env: process.env,
+        exists: fs.existsSync,
+        configHome: config.get<string>('stataHome'),
+        configEdition: parseEdition(config.get<string>('stataEdition'))
+    });
+}
 
-    // 2. Active Virtualenv or Conda environment
-    if (process.env.VIRTUAL_ENV) {
-        const venvPy = process.platform === 'win32'
-            ? path.join(process.env.VIRTUAL_ENV, 'Scripts', 'python.exe')
-            : path.join(process.env.VIRTUAL_ENV, 'bin', 'python3');
-        if (fs.existsSync(venvPy)) return venvPy;
+async function workspaceHasStataFiles(): Promise<boolean> {
+    if (!vscode.workspace.workspaceFolders?.length) {
+        return false;
     }
-    if (process.env.CONDA_PREFIX) {
-        const condaPy = process.platform === 'win32'
-            ? path.join(process.env.CONDA_PREFIX, 'python.exe')
-            : path.join(process.env.CONDA_PREFIX, 'bin', 'python3');
-        if (fs.existsSync(condaPy)) return condaPy;
-    }
-
-    // 3. Standard system locations
-    const candidates = [
-        '/home/linuxbrew/.linuxbrew/bin/python3',
-        '/usr/local/bin/python3',
-        '/opt/homebrew/bin/python3',
-        '/usr/bin/python3',
-        'python3'
-    ];
-    for (const p of candidates) {
-        if (p === 'python3' || fs.existsSync(p)) {
-            return p;
-        }
-    }
-    return 'python3';
+    const matches = await vscode.workspace.findFiles(
+        '**/*.{do,ado,dta,DO,ADO,DTA}',
+        '**/{node_modules,.git}/**',
+        1
+    );
+    return matches.length > 0;
 }
 
 function getPositronPythonFilesPath(): string | undefined {
@@ -87,169 +73,6 @@ function getPositronPythonFilesPath(): string | undefined {
         }
     }
     return undefined;
-}
-
-function findStataInstallations(): StataInstallation[] {
-    const installations: StataInstallation[] = [];
-    const seen = new Set<string>();
-
-    const addInstallation = (homeDir: string, exePath: string, versionHint?: string, editionHint?: 'mp' | 'se' | 'be') => {
-        const key = `${homeDir}:${exePath}`;
-        if (seen.has(key)) return;
-        seen.add(key);
-
-        const exeLower = path.basename(exePath).toLowerCase();
-        let edition: 'mp' | 'se' | 'be' = 'be';
-        if (editionHint && ['mp', 'se', 'be'].includes(editionHint)) {
-            edition = editionHint;
-        } else if (exeLower.includes('mp')) {
-            edition = 'mp';
-        } else if (exeLower.includes('se')) {
-            edition = 'se';
-        }
-
-        let editionStr = 'BE';
-        if (edition === 'mp') editionStr = 'MP (Parallel Edition)';
-        else if (edition === 'se') editionStr = 'SE';
-
-        // Extract version from path or hint
-        let version = versionHint || '19';
-        const match = homeDir.match(/stata(?:now)?\s*(\d+)/i) || exePath.match(/stata(?:now)?\s*(\d+)/i);
-        if (match) {
-            version = match[1];
-        }
-
-        const isStataNow = homeDir.toLowerCase().includes('statanow') || exePath.toLowerCase().includes('statanow');
-        const prefix = isStataNow ? `StataNow ${version}` : `Stata ${version}`;
-
-        installations.push({
-            homeDir,
-            executable: exePath,
-            version,
-            edition,
-            displayName: `${prefix} ${editionStr}`,
-            shortName: `${version} ${edition.toUpperCase()}`,
-            source: `System (${homeDir})`
-        });
-    };
-
-    // 1. User configuration override (positron-stata.stataHome)
-    const configHome = vscode.workspace.getConfiguration('positron-stata').get<string>('stataHome');
-    const rawConfigEdition = vscode.workspace.getConfiguration('positron-stata').get<string>('stataEdition')?.toLowerCase();
-    const configEdition: 'mp' | 'se' | 'be' | undefined = 
-        (rawConfigEdition && ['mp', 'se', 'be'].includes(rawConfigEdition)) ? (rawConfigEdition as 'mp' | 'se' | 'be') : undefined;
-
-    if (configHome && fs.existsSync(configHome)) {
-        // Look for binaries inside configHome
-        const candidateBins = [
-            'stata-mp', 'stata-se', 'stata',
-            'StataMP-64.exe', 'StataSE-64.exe', 'Stata-64.exe',
-            'StataMP.app/Contents/MacOS/stata-mp', 'StataSE.app/Contents/MacOS/stata-se', 'Stata.app/Contents/MacOS/stata'
-        ];
-        let foundBin: string | undefined;
-        for (const b of candidateBins) {
-            const full = path.join(configHome, b);
-            if (fs.existsSync(full)) {
-                foundBin = full;
-                break;
-            }
-        }
-        addInstallation(configHome, foundBin || configHome, undefined, configEdition);
-    }
-
-    // 2. Linux Candidate Directories
-    const linuxDirs = [
-        '/usr/local/stata20', '/usr/local/stata19', '/usr/local/stata18', '/usr/local/stata17', '/usr/local/stata',
-        '/opt/stata20', '/opt/stata19', '/opt/stata18', '/opt/stata17', '/opt/stata'
-    ];
-    for (const dir of linuxDirs) {
-        if (!fs.existsSync(dir)) continue;
-        const bins = ['stata-mp', 'stata-se', 'stata'];
-        for (const b of bins) {
-            const p = path.join(dir, b);
-            if (fs.existsSync(p)) {
-                addInstallation(dir, p);
-                break; // Take the highest edition found in this directory
-            }
-        }
-    }
-
-    // 3. macOS Candidate Directories
-    const macBaseDirs = [
-        '/Applications/StataNow 20', '/Applications/StataNow20',
-        '/Applications/Stata 20', '/Applications/Stata20',
-        '/Applications/StataNow 19', '/Applications/StataNow19', '/Applications/StataNow',
-        '/Applications/Stata 19', '/Applications/Stata19',
-        '/Applications/Stata 18', '/Applications/Stata18',
-        '/Applications/Stata 17', '/Applications/Stata17',
-        '/Applications/Stata'
-    ];
-    for (const base of macBaseDirs) {
-        if (!fs.existsSync(base)) continue;
-        const appEditions: [string, 'mp' | 'se' | 'be'][] = [
-            ['StataMP.app', 'mp'],
-            ['StataSE.app', 'se'],
-            ['Stata.app', 'be']
-        ];
-        for (const [app, ed] of appEditions) {
-            const cliPath = path.join(base, app, 'Contents', 'MacOS', `stata-${ed}`);
-            const guiPath = path.join(base, app, 'Contents', 'MacOS', app.replace('.app', ''));
-            if (fs.existsSync(cliPath)) {
-                addInstallation(base, cliPath, undefined, ed);
-                break;
-            } else if (fs.existsSync(guiPath)) {
-                addInstallation(base, guiPath, undefined, ed);
-                break;
-            }
-        }
-    }
-
-    // 4. Windows Candidate Directories
-    const progFiles = [
-        process.env['ProgramFiles'],
-        process.env['ProgramFiles(x86)'],
-        'C:\\Program Files',
-        'C:\\Program Files (x86)'
-    ].filter(Boolean) as string[];
-
-    for (const pf of progFiles) {
-        const winDirs = ['StataNow20', 'Stata20', 'StataNow19', 'Stata19', 'Stata18', 'Stata17', 'Stata'];
-        for (const wd of winDirs) {
-            const dir = path.join(pf, wd);
-            if (!fs.existsSync(dir)) continue;
-            const bins: [string, 'mp' | 'se' | 'be'][] = [
-                ['StataMP-64.exe', 'mp'],
-                ['StataSE-64.exe', 'se'],
-                ['Stata-64.exe', 'be'],
-                ['StataMP.exe', 'mp'],
-                ['StataSE.exe', 'se'],
-                ['Stata.exe', 'be']
-            ];
-            for (const [b, ed] of bins) {
-                const full = path.join(dir, b);
-                if (fs.existsSync(full)) {
-                    addInstallation(dir, full, undefined, ed);
-                    break;
-                }
-            }
-        }
-    }
-
-    // 5. PATH Search
-    const envPath = process.env['PATH'] || '';
-    const pathBins = ['stata-mp', 'stata-se', 'stata'];
-    for (const dir of envPath.split(path.delimiter)) {
-        if (!dir) continue;
-        for (const b of pathBins) {
-            const full = path.join(dir, b);
-            if (fs.existsSync(full)) {
-                const homeDir = path.dirname(dir); // e.g. /usr/local/stata19/bin -> /usr/local/stata19
-                addInstallation(homeDir, full);
-            }
-        }
-    }
-
-    return installations;
 }
 
 export class StataRuntimeManager implements positron.LanguageRuntimeManager {
@@ -350,14 +173,8 @@ export class StataRuntimeManager implements positron.LanguageRuntimeManager {
 
     async *discoverAllRuntimes(): AsyncGenerator<positron.LanguageRuntimeMetadata> {
         try {
-            const stataInstalls = findStataInstallations();
-
-            for (let i = 0; i < stataInstalls.length; i++) {
-                const inst = stataInstalls[i];
-                const behavior = i === 0
-                    ? positron.LanguageRuntimeStartupBehavior.Immediate
-                    : positron.LanguageRuntimeStartupBehavior.Implicit;
-                const metadata = this.buildRuntimeMetadata(inst, behavior);
+            for (const inst of findStataInstallations()) {
+                const metadata = this.buildRuntimeMetadata(inst);
                 this._discoveredRuntimes.set(metadata.runtimeId, metadata);
                 this._discoveredRuntimeCount++;
                 this._discoverEmitter.fire(metadata);
@@ -369,24 +186,16 @@ export class StataRuntimeManager implements positron.LanguageRuntimeManager {
         }
     }
 
+    // `Immediate` starts a session as soon as Positron sees the runtime, so it is
+    // reserved for workspaces that actually contain Stata files.
     async recommendedWorkspaceRuntime(): Promise<positron.LanguageRuntimeMetadata | undefined> {
-        // Positron calls recommendedWorkspaceRuntime() before discoverAllRuntimes() during startup
-        if (this._discoveredRuntimes.size === 0) {
-            const stataInstalls = findStataInstallations();
-            for (let i = 0; i < stataInstalls.length; i++) {
-                const inst = stataInstalls[i];
-                const behavior = i === 0
-                    ? positron.LanguageRuntimeStartupBehavior.Immediate
-                    : positron.LanguageRuntimeStartupBehavior.Implicit;
-                const meta = this.buildRuntimeMetadata(inst, behavior);
-                this._discoveredRuntimes.set(meta.runtimeId, meta);
-            }
+        if (!(await workspaceHasStataFiles())) {
+            return undefined;
         }
-
-        for (const meta of this._discoveredRuntimes.values()) {
-            return meta;
-        }
-        return undefined;
+        const [preferred] = findStataInstallations();
+        return preferred
+            ? this.buildRuntimeMetadata(preferred, positron.LanguageRuntimeStartupBehavior.Immediate)
+            : undefined;
     }
 
     async validateSession(sessionId: string): Promise<boolean> {
@@ -407,7 +216,7 @@ export class StataRuntimeManager implements positron.LanguageRuntimeManager {
     async restoreSession(
         runtimeMetadata: positron.LanguageRuntimeMetadata,
         sessionMetadata: positron.RuntimeSessionMetadata,
-        dynState?: positron.LanguageRuntimeDynState
+        sessionName: string
     ): Promise<positron.LanguageRuntimeSession> {
         const supervisorExt = vscode.extensions.getExtension('positron.positron-supervisor');
         if (!supervisorExt) {
@@ -419,17 +228,11 @@ export class StataRuntimeManager implements positron.LanguageRuntimeManager {
         }
 
         const supervisorApi = supervisorExt.exports as SupervisorApi;
-        const initialDynState: positron.LanguageRuntimeDynState = dynState || {
-            sessionName: sessionMetadata.sessionName || runtimeMetadata.runtimeName || 'Stata',
-            inputPrompt: '. ',
-            continuationPrompt: '> '
-        };
-
         if (supervisorApi && typeof supervisorApi.restoreSession === 'function') {
             return await supervisorApi.restoreSession(
                 runtimeMetadata,
                 sessionMetadata,
-                initialDynState
+                initialDynState(sessionName || runtimeMetadata.runtimeName)
             );
         }
 
@@ -460,19 +263,20 @@ export class StataRuntimeManager implements positron.LanguageRuntimeManager {
             throw new Error(`No kernelSpec configured for runtime: ${runtimeMetadata.runtimeName}`);
         }
 
-        const sessionName = sessionMetadata.sessionName || runtimeMetadata.runtimeName || 'Stata';
-        const dynState: positron.LanguageRuntimeDynState = {
-            sessionName: sessionName,
-            inputPrompt: '. ',
-            continuationPrompt: '> '
-        };
-
         return await supervisorApi.createSession(
             runtimeMetadata,
             sessionMetadata,
             kernelSpec,
-            dynState
+            initialDynState(runtimeMetadata.runtimeName)
         );
     }
+}
+
+function initialDynState(sessionName: string | undefined): positron.LanguageRuntimeDynState {
+    return {
+        sessionName: sessionName || 'Stata',
+        inputPrompt: '. ',
+        continuationPrompt: '> '
+    };
 }
 

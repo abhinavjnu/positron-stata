@@ -27,7 +27,11 @@ except Exception as e_pandas:
         df, _ = pyreadstat.read_dta(src)
         df.to_parquet(dst, index=False)
     except Exception as e_readstat:
-        sys.stderr.write(f"Pandas error: {e_pandas}\\npyreadstat error: {e_readstat}\\n")
+        sys.stderr.write(
+            f"pandas error: {e_pandas}\\npyreadstat error: {e_readstat}\\n"
+            "Viewing .dta files needs pandas and pyarrow in the configured Python "
+            "(pip install pandas pyarrow).\\n"
+        )
         sys.exit(1)
 `;
     return new Promise<void>((resolve, reject) => {
@@ -98,6 +102,15 @@ export async function openDtaInNativeDataExplorer(dtaUri: vscode.Uri, _context?:
     }
 }
 
+function escapeHtml(text: string): string {
+    return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 export class DtaCustomEditorProvider implements vscode.CustomReadonlyEditorProvider {
     public static readonly viewType = 'positron-stata.dtaViewer';
 
@@ -124,7 +137,7 @@ export class DtaCustomEditorProvider implements vscode.CustomReadonlyEditorProvi
         webviewPanel: vscode.WebviewPanel,
         _token: vscode.CancellationToken
     ): Promise<void> {
-        const fileName = path.basename(document.uri.fsPath);
+        const fileName = escapeHtml(path.basename(document.uri.fsPath));
         webviewPanel.webview.html = `<!DOCTYPE html>
 <html>
 <body style="display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:system-ui,-apple-system,sans-serif;color:#888;background:#1e1e1e;">
@@ -149,7 +162,7 @@ export class DtaCustomEditorProvider implements vscode.CustomReadonlyEditorProvi
 <html>
 <body style="padding:24px;font-family:sans-serif;color:#f87171;background:#1e1e1e;">
     <h3>Failed to open ${fileName} in Data Explorer</h3>
-    <pre>${err.message}</pre>
+    <pre>${escapeHtml(String(err?.message ?? err))}</pre>
 </body>
 </html>`;
         }
