@@ -1,7 +1,7 @@
 # Stata Support for Positron IDE (`positron-stata`)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Open VSX](https://img.shields.io/badge/Open%20VSX-positron--stata-purple)](https://open-vsx.org/extension/abhinav/positron-stata)
+[![Open VSX](https://img.shields.io/badge/Open%20VSX-positron--stata-purple)](https://open-vsx.org/extension/abhinavjnu/positron-stata)
 
 First-class Stata language runtime and interactive development environment for **Positron IDE** (and VS Code) with native **Variables Pane**, **Data Explorer**, **Plots Pane**, and standalone **`.dta` dataset inspection**.
 
@@ -48,7 +48,7 @@ Open Positron IDE:
 3. Click **Install**.
 
 ### Option 2: Install from `.vsix` Package
-Download the latest `positron-stata-0.1.0.vsix` from [Releases](https://github.com/abhinavk/positron-stata/releases) and run:
+Download the latest `positron-stata-0.1.0.vsix` from [Releases](https://github.com/abhinavjnu/positron-stata/releases) and run:
 
 ```bash
 # In Positron
@@ -84,7 +84,7 @@ Open your Positron Settings (`Ctrl+,` or `Cmd+,`) and navigate to **Extensions â
 
 ```bash
 # Clone the repository
-git clone https://github.com/abhinavk/positron-stata.git
+git clone https://github.com/abhinavjnu/positron-stata.git
 cd positron-stata
 
 # Build the extension bundle

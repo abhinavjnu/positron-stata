@@ -3,16 +3,16 @@
   "displayName": "Stata Support for Positron",
   "description": "First-class Stata support for Positron IDE with native Variables, Data Explorer, Plots, and .dta support.",
   "version": "0.1.0",
-  "publisher": "abhinav",
+  "publisher": "abhinavjnu",
   "license": "MIT",
   "icon": "icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/abhinavk/positron-stata"
+    "url": "https://github.com/abhinavjnu/positron-stata"
   },
-  "homepage": "https://github.com/abhinavk/positron-stata#readme",
+  "homepage": "https://github.com/abhinavjnu/positron-stata#readme",
   "bugs": {
-    "url": "https://github.com/abhinavk/positron-stata/issues"
+    "url": "https://github.com/abhinavjnu/positron-stata/issues"
   },
   "keywords": [
     "stata",
