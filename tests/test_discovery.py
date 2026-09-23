@@ -66,5 +66,11 @@ class TestStataDiscovery(unittest.TestCase):
         self.assertEqual(info["edition"], "be")
         self.assertEqual(info["display"], "Stata 17 BE")
 
+    def test_future_stata20_linux(self):
+        info = parse_stata_info("/usr/local/stata20", "/usr/local/stata20/stata-mp")
+        self.assertEqual(info["version"], "20")
+        self.assertEqual(info["edition"], "mp")
+        self.assertEqual(info["display"], "Stata 20 MP (Parallel Edition)")
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

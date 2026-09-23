@@ -1,5 +1,8 @@
 import * as vscode from 'vscode';
 import * as positron from 'positron';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { StataRuntimeManager } from './runtimeManager';
 import { DtaCustomEditorProvider, openDtaInNativeDataExplorer } from './dtaEditorProvider';
 
@@ -44,14 +47,23 @@ export function activate(context: vscode.ExtensionContext) {
                 return;
             }
 
-            // Save file if dirty
-            if (editor.document.isDirty) {
-                await editor.document.save();
+            let filePath: string;
+            if (editor.document.isUntitled) {
+                const tempDir = path.join(os.tmpdir(), 'positron-stata');
+                if (!fs.existsSync(tempDir)) {
+                    fs.mkdirSync(tempDir, { recursive: true });
+                }
+                const tempFile = path.join(tempDir, `untitled_${Date.now()}.do`);
+                fs.writeFileSync(tempFile, editor.document.getText(), 'utf8');
+                filePath = tempFile.replace(/\\/g, '/');
+            } else {
+                if (editor.document.isDirty) {
+                    await editor.document.save();
+                }
+                filePath = editor.document.uri.fsPath.replace(/\\/g, '/');
             }
 
-            const filePath = editor.document.uri.fsPath.replace(/\\/g, '/');
             const doCmd = `do "${filePath}"\n`;
-
             await positron.runtime.executeCode('stata', doCmd, true, true);
         })
     );

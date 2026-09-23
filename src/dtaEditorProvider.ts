@@ -4,27 +4,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as crypto from 'crypto';
 import { execFile } from 'child_process';
-
-function getPythonExecutable(): string {
-    const configPython = vscode.workspace.getConfiguration('positron-stata').get<string>('pythonPath');
-    if (configPython && fs.existsSync(configPython)) {
-        return configPython;
-    }
-
-    const candidates = [
-        '/home/linuxbrew/.linuxbrew/bin/python3',
-        '/usr/local/bin/python3',
-        '/opt/homebrew/bin/python3',
-        '/usr/bin/python3',
-        'python3'
-    ];
-    for (const p of candidates) {
-        if (p === 'python3' || fs.existsSync(p)) {
-            return p;
-        }
-    }
-    return 'python3';
-}
+import { getPythonExecutable } from './runtimeManager';
 
 /**
  * Converts a .dta file to parquet using Python (pandas or pyreadstat).

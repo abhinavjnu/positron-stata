@@ -75,5 +75,18 @@ class TestStataEngineEndToEnd(unittest.TestCase):
         self.assertIn("<svg", res.plots[0], "Captured plot content must contain valid SVG XML")
         print(f"[PASS] Plot generated and captured ({len(res.plots[0])} bytes SVG).")
 
+    def test_06_streaming_callbacks(self):
+        chunks = []
+        res = self.engine.execute("display 42", stdout_callback=lambda text: chunks.append(text))
+        self.assertTrue(any("42" in c for c in chunks), "Callback should receive output chunks")
+        self.assertIn("42", res.stdout)
+        print("[PASS] Streaming stdout callback verified.")
+
+    def test_07_plot_cleanup_no_duplicate(self):
+        # A subsequent non-graph command must not re-emit the previous plot
+        res = self.engine.execute("summarize price")
+        self.assertEqual(len(res.plots), 0, "Non-graph command must not export stale plots")
+        print("[PASS] Plot cleanup verified (no duplicate stale plots).")
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

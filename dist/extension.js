@@ -35,6 +35,9 @@ __export(extension_exports, {
 module.exports = __toCommonJS(extension_exports);
 var vscode3 = __toESM(require("vscode"));
 var positron2 = __toESM(require("positron"));
+var fs3 = __toESM(require("fs"));
+var os2 = __toESM(require("os"));
+var path3 = __toESM(require("path"));
 
 // src/runtimeManager.ts
 var vscode = __toESM(require("vscode"));
@@ -45,6 +48,14 @@ function getPythonExecutable() {
   const configPython = vscode.workspace.getConfiguration("positron-stata").get("pythonPath");
   if (configPython && fs.existsSync(configPython)) {
     return configPython;
+  }
+  if (process.env.VIRTUAL_ENV) {
+    const venvPy = process.platform === "win32" ? path.join(process.env.VIRTUAL_ENV, "Scripts", "python.exe") : path.join(process.env.VIRTUAL_ENV, "bin", "python3");
+    if (fs.existsSync(venvPy)) return venvPy;
+  }
+  if (process.env.CONDA_PREFIX) {
+    const condaPy = process.platform === "win32" ? path.join(process.env.CONDA_PREFIX, "python.exe") : path.join(process.env.CONDA_PREFIX, "bin", "python3");
+    if (fs.existsSync(condaPy)) return condaPy;
   }
   const candidates = [
     "/home/linuxbrew/.linuxbrew/bin/python3",
@@ -87,8 +98,10 @@ function findStataInstallations() {
     if (seen.has(key)) return;
     seen.add(key);
     const exeLower = path.basename(exePath).toLowerCase();
-    let edition = editionHint || "be";
-    if (exeLower.includes("mp")) {
+    let edition = "be";
+    if (editionHint && ["mp", "se", "be"].includes(editionHint)) {
+      edition = editionHint;
+    } else if (exeLower.includes("mp")) {
       edition = "mp";
     } else if (exeLower.includes("se")) {
       edition = "se";
@@ -114,7 +127,8 @@ function findStataInstallations() {
     });
   };
   const configHome = vscode.workspace.getConfiguration("positron-stata").get("stataHome");
-  const configEdition = vscode.workspace.getConfiguration("positron-stata").get("stataEdition");
+  const rawConfigEdition = vscode.workspace.getConfiguration("positron-stata").get("stataEdition")?.toLowerCase();
+  const configEdition = rawConfigEdition && ["mp", "se", "be"].includes(rawConfigEdition) ? rawConfigEdition : void 0;
   if (configHome && fs.existsSync(configHome)) {
     const candidateBins = [
       "stata-mp",
@@ -138,10 +152,12 @@ function findStataInstallations() {
     addInstallation(configHome, foundBin || configHome, void 0, configEdition);
   }
   const linuxDirs = [
+    "/usr/local/stata20",
     "/usr/local/stata19",
     "/usr/local/stata18",
     "/usr/local/stata17",
     "/usr/local/stata",
+    "/opt/stata20",
     "/opt/stata19",
     "/opt/stata18",
     "/opt/stata17",
@@ -159,6 +175,10 @@ function findStataInstallations() {
     }
   }
   const macBaseDirs = [
+    "/Applications/StataNow 20",
+    "/Applications/StataNow20",
+    "/Applications/Stata 20",
+    "/Applications/Stata20",
     "/Applications/StataNow 19",
     "/Applications/StataNow19",
     "/Applications/StataNow",
@@ -196,7 +216,7 @@ function findStataInstallations() {
     "C:\\Program Files (x86)"
   ].filter(Boolean);
   for (const pf of progFiles) {
-    const winDirs = ["StataNow19", "Stata19", "Stata18", "Stata17", "Stata"];
+    const winDirs = ["StataNow20", "Stata20", "StataNow19", "Stata19", "Stata18", "Stata17", "Stata"];
     for (const wd of winDirs) {
       const dir = path.join(pf, wd);
       if (!fs.existsSync(dir)) continue;
@@ -257,8 +277,13 @@ var StataRuntimeManager = class {
     const kernelPythonPath = path.join(this.context.extensionPath, "kernel");
     const positronPythonFiles = getPositronPythonFilesPath();
     const runtimeId = `stata-${inst.version}-${inst.edition}-official`;
+    const existingPythonPath = process.env.PYTHONPATH;
+    const pythonPath = existingPythonPath ? `${kernelPythonPath}${path.delimiter}${existingPythonPath}` : kernelPythonPath;
+    const currentPath = process.env.PATH || "";
+    const pathWithStata = currentPath.includes(inst.homeDir) ? currentPath : `${inst.homeDir}${path.delimiter}${currentPath}`;
     const envVars = {
-      PYTHONPATH: kernelPythonPath,
+      PYTHONPATH: pythonPath,
+      PATH: pathWithStata,
       POSITRON_STATA_ENGINE: "stata",
       STATA_HOME: inst.homeDir,
       STATA_EDITION: inst.edition,
@@ -266,6 +291,12 @@ var StataRuntimeManager = class {
     };
     if (positronPythonFiles) {
       envVars["POSITRON_PYTHON_FILES"] = positronPythonFiles;
+    }
+    if (process.platform === "linux") {
+      const currentLd = process.env.LD_LIBRARY_PATH || "";
+      if (!currentLd.includes(inst.homeDir)) {
+        envVars["LD_LIBRARY_PATH"] = currentLd ? `${inst.homeDir}:${currentLd}` : inst.homeDir;
+      }
     }
     return {
       runtimeId,
@@ -293,7 +324,7 @@ var StataRuntimeManager = class {
           ],
           display_name: inst.displayName,
           language: "stata",
-          interrupt_mode: "message",
+          interrupt_mode: "signal",
           kernel_protocol_version: "5.3",
           env: envVars
         }
@@ -407,27 +438,8 @@ var fs2 = __toESM(require("fs"));
 var os = __toESM(require("os"));
 var crypto = __toESM(require("crypto"));
 var import_child_process = require("child_process");
-function getPythonExecutable2() {
-  const configPython = vscode2.workspace.getConfiguration("positron-stata").get("pythonPath");
-  if (configPython && fs2.existsSync(configPython)) {
-    return configPython;
-  }
-  const candidates = [
-    "/home/linuxbrew/.linuxbrew/bin/python3",
-    "/usr/local/bin/python3",
-    "/opt/homebrew/bin/python3",
-    "/usr/bin/python3",
-    "python3"
-  ];
-  for (const p of candidates) {
-    if (p === "python3" || fs2.existsSync(p)) {
-      return p;
-    }
-  }
-  return "python3";
-}
 function convertDtaToParquet(filePath, cachedParquetPath) {
-  const pythonBin = getPythonExecutable2();
+  const pythonBin = getPythonExecutable();
   const pythonScript = `
 import sys
 
@@ -585,10 +597,21 @@ function activate(context) {
         vscode3.window.showWarningMessage("No active Stata do-file open.");
         return;
       }
-      if (editor.document.isDirty) {
-        await editor.document.save();
+      let filePath;
+      if (editor.document.isUntitled) {
+        const tempDir = path3.join(os2.tmpdir(), "positron-stata");
+        if (!fs3.existsSync(tempDir)) {
+          fs3.mkdirSync(tempDir, { recursive: true });
+        }
+        const tempFile = path3.join(tempDir, `untitled_${Date.now()}.do`);
+        fs3.writeFileSync(tempFile, editor.document.getText(), "utf8");
+        filePath = tempFile.replace(/\\/g, "/");
+      } else {
+        if (editor.document.isDirty) {
+          await editor.document.save();
+        }
+        filePath = editor.document.uri.fsPath.replace(/\\/g, "/");
       }
-      const filePath = editor.document.uri.fsPath.replace(/\\/g, "/");
       const doCmd = `do "${filePath}"
 `;
       await positron2.runtime.executeCode("stata", doCmd, true, true);

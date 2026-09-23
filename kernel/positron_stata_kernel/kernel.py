@@ -103,16 +103,12 @@ class PositronStataKernel(Kernel):
             topic = code_trimmed.split(maxsplit=1)[1].strip()
             self.help_handler.show_help(topic)
 
-        # Execute code in active engine
-        res = self.engine.execute(code)
+        # Stream callbacks
+        stdout_cb = (lambda text: self._send_stdout(text)) if not silent else None
+        stderr_cb = (lambda text: self._send_stderr(text)) if not silent else None
 
-        # Send stdout
-        if res.stdout and not silent:
-            self._send_stdout(res.stdout)
-
-        # Send stderr
-        if res.stderr and not silent:
-            self._send_stderr(res.stderr)
+        # Execute code in active engine with live streaming
+        res = self.engine.execute(code, stdout_callback=stdout_cb, stderr_callback=stderr_cb)
 
         # Send plots (displays in Positron's Plots tab)
         if res.plots and not silent:

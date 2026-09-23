@@ -29,14 +29,28 @@ interface StataInstallation {
     source: string;
 }
 
-function getPythonExecutable(): string {
+export function getPythonExecutable(): string {
     // 1. User configured python
     const configPython = vscode.workspace.getConfiguration('positron-stata').get<string>('pythonPath');
     if (configPython && fs.existsSync(configPython)) {
         return configPython;
     }
 
-    // 2. Standard system locations
+    // 2. Active Virtualenv or Conda environment
+    if (process.env.VIRTUAL_ENV) {
+        const venvPy = process.platform === 'win32'
+            ? path.join(process.env.VIRTUAL_ENV, 'Scripts', 'python.exe')
+            : path.join(process.env.VIRTUAL_ENV, 'bin', 'python3');
+        if (fs.existsSync(venvPy)) return venvPy;
+    }
+    if (process.env.CONDA_PREFIX) {
+        const condaPy = process.platform === 'win32'
+            ? path.join(process.env.CONDA_PREFIX, 'python.exe')
+            : path.join(process.env.CONDA_PREFIX, 'bin', 'python3');
+        if (fs.existsSync(condaPy)) return condaPy;
+    }
+
+    // 3. Standard system locations
     const candidates = [
         '/home/linuxbrew/.linuxbrew/bin/python3',
         '/usr/local/bin/python3',
@@ -85,8 +99,10 @@ function findStataInstallations(): StataInstallation[] {
         seen.add(key);
 
         const exeLower = path.basename(exePath).toLowerCase();
-        let edition: 'mp' | 'se' | 'be' = editionHint || 'be';
-        if (exeLower.includes('mp')) {
+        let edition: 'mp' | 'se' | 'be' = 'be';
+        if (editionHint && ['mp', 'se', 'be'].includes(editionHint)) {
+            edition = editionHint;
+        } else if (exeLower.includes('mp')) {
             edition = 'mp';
         } else if (exeLower.includes('se')) {
             edition = 'se';
@@ -119,7 +135,10 @@ function findStataInstallations(): StataInstallation[] {
 
     // 1. User configuration override (positron-stata.stataHome)
     const configHome = vscode.workspace.getConfiguration('positron-stata').get<string>('stataHome');
-    const configEdition = vscode.workspace.getConfiguration('positron-stata').get<string>('stataEdition') as 'mp' | 'se' | 'be' | undefined;
+    const rawConfigEdition = vscode.workspace.getConfiguration('positron-stata').get<string>('stataEdition')?.toLowerCase();
+    const configEdition: 'mp' | 'se' | 'be' | undefined = 
+        (rawConfigEdition && ['mp', 'se', 'be'].includes(rawConfigEdition)) ? (rawConfigEdition as 'mp' | 'se' | 'be') : undefined;
+
     if (configHome && fs.existsSync(configHome)) {
         // Look for binaries inside configHome
         const candidateBins = [
@@ -140,8 +159,8 @@ function findStataInstallations(): StataInstallation[] {
 
     // 2. Linux Candidate Directories
     const linuxDirs = [
-        '/usr/local/stata19', '/usr/local/stata18', '/usr/local/stata17', '/usr/local/stata',
-        '/opt/stata19', '/opt/stata18', '/opt/stata17', '/opt/stata'
+        '/usr/local/stata20', '/usr/local/stata19', '/usr/local/stata18', '/usr/local/stata17', '/usr/local/stata',
+        '/opt/stata20', '/opt/stata19', '/opt/stata18', '/opt/stata17', '/opt/stata'
     ];
     for (const dir of linuxDirs) {
         if (!fs.existsSync(dir)) continue;
@@ -157,6 +176,8 @@ function findStataInstallations(): StataInstallation[] {
 
     // 3. macOS Candidate Directories
     const macBaseDirs = [
+        '/Applications/StataNow 20', '/Applications/StataNow20',
+        '/Applications/Stata 20', '/Applications/Stata20',
         '/Applications/StataNow 19', '/Applications/StataNow19', '/Applications/StataNow',
         '/Applications/Stata 19', '/Applications/Stata19',
         '/Applications/Stata 18', '/Applications/Stata18',
@@ -192,7 +213,7 @@ function findStataInstallations(): StataInstallation[] {
     ].filter(Boolean) as string[];
 
     for (const pf of progFiles) {
-        const winDirs = ['StataNow19', 'Stata19', 'Stata18', 'Stata17', 'Stata'];
+        const winDirs = ['StataNow20', 'Stata20', 'StataNow19', 'Stata19', 'Stata18', 'Stata17', 'Stata'];
         for (const wd of winDirs) {
             const dir = path.join(pf, wd);
             if (!fs.existsSync(dir)) continue;
@@ -263,8 +284,19 @@ export class StataRuntimeManager implements positron.LanguageRuntimeManager {
         const positronPythonFiles = getPositronPythonFilesPath();
 
         const runtimeId = `stata-${inst.version}-${inst.edition}-official`;
+        const existingPythonPath = process.env.PYTHONPATH;
+        const pythonPath = existingPythonPath
+            ? `${kernelPythonPath}${path.delimiter}${existingPythonPath}`
+            : kernelPythonPath;
+
+        const currentPath = process.env.PATH || '';
+        const pathWithStata = currentPath.includes(inst.homeDir)
+            ? currentPath
+            : `${inst.homeDir}${path.delimiter}${currentPath}`;
+
         const envVars: Record<string, string> = {
-            PYTHONPATH: kernelPythonPath,
+            PYTHONPATH: pythonPath,
+            PATH: pathWithStata,
             POSITRON_STATA_ENGINE: 'stata',
             STATA_HOME: inst.homeDir,
             STATA_EDITION: inst.edition,
@@ -272,6 +304,14 @@ export class StataRuntimeManager implements positron.LanguageRuntimeManager {
         };
         if (positronPythonFiles) {
             envVars['POSITRON_PYTHON_FILES'] = positronPythonFiles;
+        }
+        if (process.platform === 'linux') {
+            const currentLd = process.env.LD_LIBRARY_PATH || '';
+            if (!currentLd.includes(inst.homeDir)) {
+                envVars['LD_LIBRARY_PATH'] = currentLd
+                    ? `${inst.homeDir}:${currentLd}`
+                    : inst.homeDir;
+            }
         }
 
         return {
@@ -300,7 +340,7 @@ export class StataRuntimeManager implements positron.LanguageRuntimeManager {
                     ],
                     display_name: inst.displayName,
                     language: 'stata',
-                    interrupt_mode: 'message',
+                    interrupt_mode: 'signal',
                     kernel_protocol_version: '5.3',
                     env: envVars
                 }

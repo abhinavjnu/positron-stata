@@ -20,6 +20,28 @@ class ExecutionResult:
         self.request_open_data_explorer = request_open_data_explorer
 
 
+class _StreamInterceptor:
+    def __init__(self, callback=None):
+        self.callback = callback
+        self.buf = io.StringIO()
+
+    def write(self, s: str):
+        if not s:
+            return
+        self.buf.write(s)
+        if self.callback:
+            try:
+                self.callback(s)
+            except Exception:
+                pass
+
+    def flush(self):
+        pass
+
+    def getvalue(self) -> str:
+        return self.buf.getvalue()
+
+
 class StataEngine:
     def __init__(self, stata_home: Optional[str] = None, edition: Optional[str] = None):
         self.stata_home = stata_home or os.environ.get("STATA_HOME", "/usr/local/stata19")
@@ -30,6 +52,7 @@ class StataEngine:
         self._last_obs = -1
         self._last_vars = -1
         self._last_file = ""
+        self._last_changed = "0"
         self._last_plot_counter = 0
 
     def initialize(self):
@@ -40,21 +63,36 @@ class StataEngine:
         if utilities_path not in sys.path:
             sys.path.insert(0, utilities_path)
 
-        try:
-            from pystata import config
-            config.init(self.edition)
-            from pystata import stata
-            import sfi
-            self._stata = stata
-            self._sfi = sfi
-            self._initialized = True
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to initialize PyStata from {self.stata_home} (edition: {self.edition}): {e}\n"
-                "Please verify that your Stata license is active and that Stata 17+ is installed at this path."
-            )
+        target_edition = (self.edition or "mp").lower()
+        if target_edition not in ("mp", "se", "be"):
+            target_edition = "mp"
 
-    def execute(self, code: str) -> ExecutionResult:
+        candidate_editions = [target_edition]
+        for ed in ("mp", "se", "be"):
+            if ed not in candidate_editions:
+                candidate_editions.append(ed)
+
+        last_error = None
+        for ed in candidate_editions:
+            try:
+                from pystata import config
+                config.init(ed)
+                from pystata import stata
+                import sfi
+                self._stata = stata
+                self._sfi = sfi
+                self.edition = ed
+                self._initialized = True
+                return
+            except Exception as e:
+                last_error = e
+
+        raise RuntimeError(
+            f"Failed to initialize PyStata from {self.stata_home} (editions tried: {candidate_editions}): {last_error}\n"
+            "Please verify that your Stata license is active and that Stata 17+ is installed at this path."
+        )
+
+    def execute(self, code: str, stdout_callback=None, stderr_callback=None) -> ExecutionResult:
         if not self._initialized:
             self.initialize()
 
@@ -68,11 +106,11 @@ class StataEngine:
                 request_open_data_explorer = True
                 break
 
-        # Capture output
+        # Capture output with streaming interceptors
         old_stdout = sys.stdout
         old_stderr = sys.stderr
-        capture_out = io.StringIO()
-        capture_err = io.StringIO()
+        capture_out = _StreamInterceptor(callback=stdout_callback)
+        capture_err = _StreamInterceptor(callback=stderr_callback)
         sys.stdout = capture_out
         sys.stderr = capture_err
 
@@ -80,7 +118,10 @@ class StataEngine:
             # Execute command in Stata
             self._stata.run(code)
         except Exception as e:
-            capture_err.write(str(e))
+            err_msg = str(e)
+            if not err_msg.endswith("\n"):
+                err_msg += "\n"
+            capture_err.write(err_msg)
         finally:
             sys.stdout = old_stdout
             sys.stderr = old_stderr
@@ -105,18 +146,19 @@ class StataEngine:
     def _check_and_export_plots(self, executed_code: str) -> List[str]:
         """Detect and export any newly generated Stata graphs to SVG."""
         plots = []
-        # Commands likely to produce graphics
-        plot_keywords = (
-            "graph", "scatter", "twoway", "histogram", "hist", "kdensity", 
-            "marginsplot", "coefplot", "line", "bar", "box", "pie", 
-            "qnorm", "pnorm", "ac", "pac", "xcorr", "binscatter"
+        # Commands likely to produce graphics (word boundary match)
+        plot_pattern = re.compile(
+            r'\b(graph|scatter|twoway|histogram|hist|kdensity|marginsplot|coefplot|line|bar|box|pie|qnorm|pnorm|ac|pac|xcorr|binscatter)\b',
+            re.IGNORECASE
         )
-        lower_code = executed_code.lower()
-        if not any(kw in lower_code for kw in plot_keywords):
+        if not plot_pattern.search(executed_code):
             return plots
 
+        tmp = None
         try:
-            tmp = tempfile.mktemp(suffix=".svg")
+            with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as tf:
+                tmp = tf.name
+
             # Export the currently active Stata graph to SVG
             self._stata.run(f'qui graph export "{tmp}", as(svg) replace')
             if os.path.exists(tmp) and os.path.getsize(tmp) > 500:
@@ -124,23 +166,40 @@ class StataEngine:
                     svg_content = f.read()
                 if "<svg" in svg_content:
                     plots.append(svg_content)
-                os.remove(tmp)
+                    # Clear exported graph from memory so it won't be re-exported
+                    try:
+                        self._stata.run("qui graph drop _all")
+                    except Exception:
+                        pass
         except Exception:
             pass
+        finally:
+            if tmp and os.path.exists(tmp):
+                try:
+                    os.remove(tmp)
+                except Exception:
+                    pass
 
         return plots
 
     def _check_dataset_changed(self) -> bool:
-        """Check if observation count, variable count, or filename changed."""
+        """Check if observation count, variable count, filename, or c(changed) changed."""
         try:
             obs = self._sfi.Data.getObsTotal()
             vars_cnt = self._sfi.Data.getVarCount()
             filename = self._sfi.Macro.getGlobal("c(filename)") or ""
+            changed_flag = self._sfi.Macro.getGlobal("c(changed)") or "0"
 
-            changed = (obs != self._last_obs or vars_cnt != self._last_vars or filename != self._last_file)
+            changed = (
+                obs != self._last_obs or 
+                vars_cnt != self._last_vars or 
+                filename != self._last_file or
+                (changed_flag == "1" and self._last_changed != "1")
+            )
             self._last_obs = obs
             self._last_vars = vars_cnt
             self._last_file = filename
+            self._last_changed = changed_flag
             return changed
         except Exception:
             return False
