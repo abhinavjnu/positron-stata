@@ -27,7 +27,7 @@ from .help_handler import StataHelpHandler
 
 class PositronStataKernel(Kernel):
     implementation = "positron_stata"
-    implementation_version = "0.1.5"
+    implementation_version = "0.1.6"
     language = "stata"
     language_version = os.environ.get("STATA_VERSION", "19")
     language_info = {
@@ -90,9 +90,9 @@ class PositronStataKernel(Kernel):
         if not code_trimmed:
             return self._ok_reply()
 
-        help_m = re.match(r"^(?:help|h)\s+([a-zA-Z0-9_]+)\s*$", code_trimmed, re.IGNORECASE)
+        help_m = re.match(r"^(?:help|h)(?:\s+([a-zA-Z0-9_\.]+))?\s*$", code_trimmed, re.IGNORECASE)
         if help_m and self.help_handler._comm is not None:
-            topic = help_m.group(1)
+            topic = help_m.group(1) or "help"
             self.help_handler.show_help(topic)
             if not silent:
                 self._send_stdout(f"Displaying Stata help for '{topic}' in the Help pane.\n")

@@ -262,5 +262,54 @@ class TestAgainstGoldenFixture(_EngineTestCase):
         self.assertTrue(self.golden["r_results_preserved"]["display_r_mean"].startswith("6165.25"))
 
 
+class TestStataHelpHandler(unittest.TestCase):
+    def test_help_handler_http_server_and_show_help(self):
+        import urllib.request
+        from positron_stata_kernel.help_handler import StataHelpHandler
+
+        class MockEngine:
+            def execute(self, cmd):
+                class MockRes:
+                    stdout = "[R] regress -- Linear regression syntax"
+                    error = None
+                return MockRes()
+
+        class MockKernel:
+            def __init__(self):
+                self.engine = MockEngine()
+
+        class MockComm:
+            def __init__(self):
+                self.events = []
+
+            def send_event(self, name, payload):
+                self.events.append((name, payload))
+
+        kernel = MockKernel()
+        handler = StataHelpHandler(kernel)
+        self.assertGreater(handler._port, 0)
+
+        # Test HTTP GET
+        url = f"http://127.0.0.1:{handler._port}/help?topic=regress"
+        with urllib.request.urlopen(url) as resp:
+            self.assertEqual(resp.status, 200)
+            content = resp.read().decode("utf-8")
+            self.assertIn("Stata Help: <code>regress</code>", content)
+            self.assertIn("Linear regression syntax", content)
+
+        # Test show_help with mock comm
+        handler._comm = MockComm()
+        handler.show_help("regress")
+        self.assertEqual(len(handler._comm.events), 1)
+        name, payload = handler._comm.events[0]
+        self.assertEqual(name, "show_help")
+        self.assertEqual(payload["content"], url)
+        self.assertEqual(str(payload["kind"]), "ShowHelpKind.Url")
+        self.assertTrue(payload["focus"])
+
+        handler.shutdown()
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
