@@ -1,0 +1,44 @@
+name: Publish to Open VSX
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Package VSIX
+        run: python3 package_vsix.py
+
+      - name: Publish to Open VSX
+        run: npx ovsx publish positron-stata-*.vsix -p ${{ secrets.OVSX_PAT }}
+
+      - name: Attach VSIX to GitHub Release
+        if: github.event_name == 'release'
+        run: gh release upload ${{ github.event.release.tag_name }} positron-stata-*.vsix --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
