@@ -29,7 +29,7 @@ from .help_handler import StataHelpHandler
 
 class PositronStataKernel(Kernel):
     implementation = "positron_stata"
-    implementation_version = "0.2.1"
+    implementation_version = "0.2.2"
     language = "stata"
     language_version = os.environ.get("STATA_VERSION", "19")
     language_info = {
