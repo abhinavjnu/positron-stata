@@ -88,5 +88,34 @@ class TestStataEngineEndToEnd(unittest.TestCase):
         self.assertEqual(len(res.plots), 0, "Non-graph command must not export stale plots")
         print("[PASS] Plot cleanup verified (no duplicate stale plots).")
 
+    def test_08_variable_names_and_completion(self):
+        self.engine.execute("sysuse auto, clear")
+        names = self.engine.get_variable_names()
+        self.assertIn("price", names)
+        self.assertIn("mpg", names)
+        self.assertIn("make", names)
+        self.assertEqual(len(names), 12)
+        print(f"[PASS] get_variable_names returned {len(names)} variables.")
+
+    def test_09_kernel_do_complete(self):
+        from positron_stata_kernel.completer import complete_stata
+
+        # Test variable completion
+        res = complete_stata("sum pr", 6, self.engine.get_variable_names)
+        self.assertIn("price", res["matches"])
+
+        # Test command completion
+        res2 = complete_stata("reg", 3, self.engine.get_variable_names)
+        self.assertIn("regress", res2["matches"])
+
+        # Test factor variable completion
+        res3 = complete_stata("reg price i.rep", 15, self.engine.get_variable_names)
+        self.assertIn("i.rep78", res3["matches"])
+
+        # Test global macro completion
+        res4 = complete_stata("disp $c", 7, self.engine.get_variable_names)
+        self.assertTrue(any(m.startswith("$c(") for m in res4["matches"]))
+        print("[PASS] Autocompletion verified across variables, factor variables, commands, and macros.")
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

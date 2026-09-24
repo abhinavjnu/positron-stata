@@ -4,6 +4,7 @@ Handles execution, streaming output, plots, Variables pane comms, UI/Help comms,
 """
 
 import os
+import re
 import sys
 from typing import Optional
 
@@ -18,6 +19,7 @@ from positron.data_explorer import DataExplorerService
 from positron.utils import BackgroundJobQueue
 
 from . import completeness
+from .completer import complete_stata
 from .stata_engine import StataEngine
 from .variables_handler import StataVariablesHandler
 from .ui_handler import StataUiHandler
@@ -25,7 +27,7 @@ from .help_handler import StataHelpHandler
 
 class PositronStataKernel(Kernel):
     implementation = "positron_stata"
-    implementation_version = "0.1.3"
+    implementation_version = "0.1.5"
     language = "stata"
     language_version = os.environ.get("STATA_VERSION", "19")
     language_info = {
@@ -80,13 +82,20 @@ class PositronStataKernel(Kernel):
     async def do_is_complete(self, code: str):
         return completeness.check(code)
 
+    def do_complete(self, code: str, cursor_pos: int):
+        return complete_stata(code, cursor_pos, self.engine.get_variable_names)
+
     def do_execute(self, code, silent, store_history=True, user_expressions=None, allow_stdin=False):
         code_trimmed = code.strip()
         if not code_trimmed:
             return self._ok_reply()
 
-        if code_trimmed.lower().startswith("help ") and "\n" not in code_trimmed:
-            self.help_handler.show_help(code_trimmed.split(maxsplit=1)[1].strip())
+        help_m = re.match(r"^(?:help|h)\s+([a-zA-Z0-9_]+)\s*$", code_trimmed, re.IGNORECASE)
+        if help_m and self.help_handler._comm is not None:
+            topic = help_m.group(1)
+            self.help_handler.show_help(topic)
+            if not silent:
+                self._send_stdout(f"Displaying Stata help for '{topic}' in the Help pane.\n")
             return self._ok_reply()
 
         stdout_cb = (lambda text: self._send_stdout(text)) if not silent else None

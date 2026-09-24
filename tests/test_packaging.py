@@ -48,6 +48,7 @@ class TestPackaging(unittest.TestCase):
             self.assertIn("extension/kernel/positron_stata_kernel/kernel.py", namelist)
             self.assertIn("extension/kernel/positron_stata_kernel/stata_engine.py", namelist)
             self.assertIn("extension/kernel/positron_stata_kernel/_positron_loader.py", namelist)
+            self.assertIn("extension/kernel/positron_stata_kernel/completer.py", namelist)
             print(f"[PASS] All {len(namelist)} expected package assets verified.")
 
     def test_manifest_xml_validity(self):

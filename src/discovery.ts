@@ -186,19 +186,8 @@ function newestPythonDirs(entries: string[], pattern: RegExp): string[] {
     const version = (name: string) => {
         const m = name.match(/(\d+)\.?(\d+)?/);
         if (!m) return 0;
-        let major = 3;
-        let minor = 0;
-        if (m[2] !== undefined) {
-            major = Number(m[1]);
-            minor = Number(m[2]);
-        } else if (m[1].startsWith('3') && m[1].length > 1) {
-            major = 3;
-            minor = Number(m[1].slice(1));
-        } else {
-            minor = Number(m[1]);
-        }
-        // PyStata requires Python <= 3.13; rank >= 3.14 below compatible versions
-        return major === 3 && minor >= 14 ? -1 : major * 1000 + minor;
+        const [maj, min] = m[2] !== undefined ? [+m[1], +m[2]] : [3, +m[1].replace(/^3/, '')];
+        return maj === 3 && min >= 14 ? -1 : maj * 1000 + min;
     };
     return entries.filter(e => pattern.test(e)).sort((a, b) => version(b) - version(a));
 }
@@ -259,25 +248,18 @@ export function resolvePythonExecutable(opts: PythonResolveOptions): string {
         return 'python';
     }
 
-    for (const candidate of [
-        '/opt/homebrew/bin/python3.13',
-        '/opt/homebrew/bin/python3.12',
-        '/opt/homebrew/bin/python3.11',
-        '/opt/homebrew/bin/python3.10',
-        '/opt/homebrew/bin/python3.9',
-        '/Library/Frameworks/Python.framework/Versions/3.13/bin/python3',
-        '/Library/Frameworks/Python.framework/Versions/3.12/bin/python3',
-        '/Library/Frameworks/Python.framework/Versions/3.11/bin/python3',
-        '/Library/Frameworks/Python.framework/Versions/3.10/bin/python3',
-        '/usr/local/bin/python3.13',
-        '/usr/local/bin/python3.12',
-        '/usr/local/bin/python3.11',
-        '/usr/local/bin/python3.10',
+    const candidates = [
+        ...['13', '12', '11', '10', '9'].flatMap(v => [
+            `/opt/homebrew/bin/python3.${v}`,
+            `/Library/Frameworks/Python.framework/Versions/3.${v}/bin/python3`,
+            `/usr/local/bin/python3.${v}`
+        ]),
         '/usr/bin/python3',
         '/home/linuxbrew/.linuxbrew/bin/python3',
         '/opt/homebrew/bin/python3',
         '/usr/local/bin/python3'
-    ]) {
+    ];
+    for (const candidate of candidates) {
         if (exists(candidate)) return candidate;
     }
     return 'python3';

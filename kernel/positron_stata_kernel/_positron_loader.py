@@ -8,24 +8,31 @@ import sys
 def ensure_positron_imported():
     # 1. Environment variable passed from extension
     env_path = os.environ.get("POSITRON_PYTHON_FILES")
-    if env_path and os.path.exists(env_path) and env_path not in sys.path:
-        sys.path.insert(0, env_path)
-        return
+    base_dirs = []
+    if env_path and os.path.exists(env_path):
+        base_dirs.append(os.path.dirname(env_path) if os.path.basename(env_path) == "posit" else env_path)
 
     # 2. Probe candidate platform locations
-    candidates = [
+    base_dirs.extend([
         # Linux
-        "/usr/share/positron/resources/app/extensions/positron-python/python_files/posit",
-        "/usr/lib/positron/resources/app/extensions/positron-python/python_files/posit",
+        "/usr/share/positron/resources/app/extensions/positron-python/python_files",
+        "/usr/lib/positron/resources/app/extensions/positron-python/python_files",
         # macOS
-        "/Applications/Positron.app/Contents/Resources/app/extensions/positron-python/python_files/posit",
+        "/Applications/Positron.app/Contents/Resources/app/extensions/positron-python/python_files",
         # Windows
-        os.path.expandvars(r"%LOCALAPPDATA%\Programs\Positron\resources\app\extensions\positron-python\python_files\posit"),
-        os.path.expandvars(r"%PROGRAMFILES%\Positron\resources\app\extensions\positron-python\python_files\posit"),
-    ]
-    for c in candidates:
-        if c and os.path.exists(c) and c not in sys.path:
-            sys.path.insert(0, c)
+        os.path.expandvars(r"%LOCALAPPDATA%\Programs\Positron\resources\app\extensions\positron-python\python_files"),
+        os.path.expandvars(r"%PROGRAMFILES%\Positron\resources\app\extensions\positron-python\python_files"),
+    ])
+
+    for base in base_dirs:
+        if base and os.path.exists(base):
+            for sub in [
+                os.path.join(base, "posit"),
+                os.path.join(base, "lib", "ipykernel", "py3"),
+                os.path.join(base, "lib", "python"),
+            ]:
+                if os.path.exists(sub) and sub not in sys.path:
+                    sys.path.insert(0, sub)
             return
 
 ensure_positron_imported()

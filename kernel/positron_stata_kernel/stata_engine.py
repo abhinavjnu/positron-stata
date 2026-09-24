@@ -95,11 +95,7 @@ class StataEngine:
         target_edition = (self.edition or "mp").lower()
         if target_edition not in ("mp", "se", "be"):
             target_edition = "mp"
-
-        candidate_editions = [target_edition]
-        for ed in ("mp", "se", "be"):
-            if ed not in candidate_editions:
-                candidate_editions.append(ed)
+        candidate_editions = [target_edition, *(ed for ed in ("mp", "se", "be") if ed != target_edition)]
 
         last_error = None
         for ed in candidate_editions:
@@ -312,3 +308,12 @@ class StataEngine:
         except Exception as e:
             import pandas as pd
             return pd.DataFrame()
+
+    def get_variable_names(self) -> List[str]:
+        """Return variable names in the current dataset."""
+        if not self._initialized or not self._sfi:
+            return []
+        try:
+            return [self._sfi.Data.getVarName(i) for i in range(self._sfi.Data.getVarCount())]
+        except Exception:
+            return []
