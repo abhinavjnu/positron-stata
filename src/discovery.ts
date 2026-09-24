@@ -1,4 +1,5 @@
 import * as path from 'path';
+import { enumeratePythonCandidates } from './pythonEnv';
 
 export type StataEdition = 'mp' | 'se' | 'be';
 
@@ -10,11 +11,20 @@ export interface StataInstallation {
     displayName: string;
     shortName: string;
     source: string;
+    /** Full version such as "19.5" when it could be read from the installation, else undefined. */
+    fullVersion?: string;
+    /** How `version` was determined: install marker file (`isstata.195`) or the folder/executable name. */
+    versionSource?: 'install files' | 'folder name' | 'default';
+    isStataNow?: boolean;
+    /** Whether `<home>/utilities/pystata` exists (Stata 17+). Undefined if it was not checked. */
+    hasPyStata?: boolean;
 }
 
 export interface DiscoveryOptions {
     env: NodeJS.ProcessEnv;
     exists: (p: string) => boolean;
+    /** Lists a directory; enables version detection from `isstata.NNN` / `installed.NNN` marker files. */
+    listDir?: (p: string) => string[];
     configHome?: string;
     configEdition?: StataEdition;
 }
@@ -28,36 +38,62 @@ export interface PythonResolveOptions {
 }
 
 const EDITIONS: readonly StataEdition[] = ['mp', 'se', 'be'];
+/** Newest first; covers future releases so a new Stata is found without an extension update. */
+const VERSIONS = ['21', '20', '19', '18', '17'];
 
 export function parseEdition(value: string | undefined): StataEdition | undefined {
     const v = value?.toLowerCase();
     return v && (EDITIONS as readonly string[]).includes(v) ? (v as StataEdition) : undefined;
 }
 
+function editionFromName(name: string): StataEdition | undefined {
+    const n = name.toLowerCase();
+    if (/mp/.test(n)) return 'mp';
+    if (/se(?:-64)?(?:\.exe|\.app)?$|stata-?se/.test(n)) return 'se';
+    if (/be/.test(n)) return 'be';
+    return undefined;
+}
+
+/**
+ * Reads the version from Stata's own marker files: `isstata.195` / `installed.190` mean 19.5 / 19.0.
+ * A non-zero minor (x.5) is StataNow, which is verified against `about` on StataNow/MP 19.5.
+ */
+export function versionFromInstallFiles(entries: string[]): { major: string; minor: string } | undefined {
+    let best = -1;
+    for (const e of entries) {
+        const m = e.match(/^(?:isstata|installed)\.(\d{3})$/i);
+        if (m && +m[1] > best) best = +m[1];
+    }
+    if (best < 0) return undefined;
+    return { major: String(Math.floor(best / 10)), minor: String(best % 10) };
+}
+
 export function describeInstallation(
     homeDir: string,
     exePath: string,
-    editionHint?: StataEdition
+    editionHint?: StataEdition,
+    homeEntries?: string[]
 ): StataInstallation {
-    const exeLower = path.basename(exePath).toLowerCase();
-    let edition: StataEdition = 'be';
-    if (editionHint) {
-        edition = editionHint;
-    } else if (exeLower.includes('mp')) {
-        edition = 'mp';
-    } else if (exeLower.includes('se')) {
-        edition = 'se';
-    }
-
+    const edition: StataEdition = editionHint ?? editionFromName(path.basename(exePath)) ?? 'be';
     const editionStr = edition === 'mp' ? 'MP (Parallel Edition)' : edition.toUpperCase();
 
     let version = '19';
-    const match = homeDir.match(/stata(?:now)?\s*(\d+)/i) || exePath.match(/stata(?:now)?\s*(\d+)/i);
-    if (match) {
-        version = match[1];
+    let fullVersion: string | undefined;
+    let versionSource: StataInstallation['versionSource'] = 'default';
+    const fromFiles = homeEntries ? versionFromInstallFiles(homeEntries) : undefined;
+    if (fromFiles) {
+        version = fromFiles.major;
+        fullVersion = `${fromFiles.major}.${fromFiles.minor}`;
+        versionSource = 'install files';
+    } else {
+        const match = homeDir.match(/stata(?:now)?\s*(\d+)/i) || exePath.match(/stata(?:now)?\s*(\d+)/i);
+        if (match) {
+            version = match[1];
+            versionSource = 'folder name';
+        }
     }
 
-    const isStataNow = /statanow/i.test(homeDir) || /statanow/i.test(exePath);
+    const isStataNow = /statanow/i.test(homeDir) || /statanow/i.test(exePath) || (!!fromFiles && fromFiles.minor !== '0');
     const prefix = isStataNow ? `StataNow ${version}` : `Stata ${version}`;
 
     return {
@@ -67,7 +103,10 @@ export function describeInstallation(
         edition,
         displayName: `${prefix} ${editionStr}`,
         shortName: `${version} ${edition.toUpperCase()}`,
-        source: `System (${homeDir})`
+        source: `System (${homeDir})`,
+        fullVersion,
+        versionSource,
+        isStataNow
     };
 }
 
@@ -89,55 +128,106 @@ const MAC_APPS: [string, StataEdition][] = [
     ['Stata.app', 'be']
 ];
 
+const UNIX_BINARIES = ['stata-mp', 'stata-se', 'stata'];
+
+/** Splits a path on either separator so Windows and POSIX paths both work regardless of host. */
+function parentOf(p: string): string {
+    const trimmed = p.replace(/[\\/]+$/, '');
+    const idx = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
+    return idx > 0 ? trimmed.slice(0, idx) : trimmed;
+}
+
+function join(base: string, ...parts: string[]): string {
+    const sep = /\\/.test(base) && !/\//.test(base) ? '\\' : '/';
+    return [base.replace(/[\\/]+$/, ''), ...parts].join(sep);
+}
+
+/**
+ * Accepts what users paste into `positron-stata.stataHome`: the install folder, a macOS `.app` bundle, or the
+ * Stata executable itself (including `…/StataMP.app/Contents/MacOS/stata-mp`). Returns the folder that PyStata
+ * expects (the one containing `utilities/`), the executable, and an edition hint.
+ */
+export function resolveConfiguredHome(
+    configured: string,
+    exists: (p: string) => boolean
+): { homeDir: string; executable?: string; edition?: StataEdition } {
+    const home = configured.replace(/[\\/]+$/, '');
+    const appMatch = home.match(/^(.*?)[\\/]([^\\/]+\.app)(?:[\\/]Contents(?:[\\/]MacOS(?:[\\/]([^\\/]+))?)?)?$/i);
+    if (appMatch) {
+        const [, parent, app, exe] = appMatch;
+        const edition = editionFromName(app);
+        const appDir = join(parent, app);
+        const exeCandidates = exe
+            ? [join(appDir, 'Contents', 'MacOS', exe)]
+            : [join(appDir, 'Contents', 'MacOS', `stata-${edition ?? 'be'}`), join(appDir, 'Contents', 'MacOS', app.replace(/\.app$/i, '')), join(appDir, 'Contents', 'MacOS', 'stata')];
+        return { homeDir: parent, executable: exeCandidates.find(exists) ?? exeCandidates[0], edition };
+    }
+    const base = home.split(/[\\/]/).pop() || '';
+    if (/^x?stata(?:-(?:mp|se|be))?$/i.test(base) || /^stata.*\.exe$/i.test(base)) {
+        // Looks like an executable; only treat it as one if it is not also a directory holding Stata.
+        if (!exists(join(home, 'utilities')) && !UNIX_BINARIES.some(b => exists(join(home, b)))) {
+            return { homeDir: parentOf(home), executable: home, edition: editionFromName(base) };
+        }
+    }
+    return { homeDir: home };
+}
+
 export function findStataInstallations(opts: DiscoveryOptions): StataInstallation[] {
     const { env, exists } = opts;
     const installations: StataInstallation[] = [];
     const seen = new Set<string>();
+    const list = (dir: string): string[] | undefined => {
+        if (!opts.listDir) return undefined;
+        try {
+            return opts.listDir(dir);
+        } catch {
+            return undefined;
+        }
+    };
 
+    // One runtime per installation folder; the first hit (highest edition / configured) wins.
     const add = (homeDir: string, exePath: string, editionHint?: StataEdition) => {
-        const key = `${homeDir}:${exePath}`;
+        const key = homeDir.replace(/[\\/]+$/, '').toLowerCase();
         if (seen.has(key)) return;
         seen.add(key);
-        installations.push(describeInstallation(homeDir, exePath, editionHint));
+        const inst = describeInstallation(homeDir, exePath, editionHint, list(homeDir));
+        inst.hasPyStata = exists(join(homeDir, 'utilities', 'pystata'));
+        installations.push(inst);
     };
 
     if (opts.configHome && exists(opts.configHome)) {
+        const resolved = resolveConfiguredHome(opts.configHome, exists);
         const candidates = [
-            'stata-mp', 'stata-se', 'stata',
+            ...UNIX_BINARIES,
             ...WINDOWS_BINARIES.map(([b]) => b),
-            'StataMP.app/Contents/MacOS/stata-mp',
-            'StataSE.app/Contents/MacOS/stata-se',
-            'StataBE.app/Contents/MacOS/stata-be',
-            'Stata.app/Contents/MacOS/stata'
+            ...MAC_APPS.flatMap(([app, ed]) => [`${app}/Contents/MacOS/stata-${ed}`, `${app}/Contents/MacOS/${app.replace('.app', '')}`])
         ];
-        const found = candidates.map(b => path.join(opts.configHome!, b)).find(exists);
-        add(opts.configHome, found || opts.configHome, opts.configEdition);
+        const found = resolved.executable ?? candidates.map(b => join(resolved.homeDir, ...b.split('/'))).find(exists);
+        add(resolved.homeDir, found || resolved.homeDir, opts.configEdition ?? resolved.edition);
     }
 
     const linuxDirs = [
-        '/usr/local/stata20', '/usr/local/stata19', '/usr/local/stata18', '/usr/local/stata17', '/usr/local/stata',
-        '/opt/stata20', '/opt/stata19', '/opt/stata18', '/opt/stata17', '/opt/stata'
+        ...VERSIONS.flatMap(v => [`/usr/local/statanow${v}`, `/usr/local/stata${v}`]),
+        '/usr/local/statanow', '/usr/local/stata',
+        ...VERSIONS.flatMap(v => [`/opt/statanow${v}`, `/opt/stata${v}`]),
+        '/opt/statanow', '/opt/stata'
     ];
     for (const dir of linuxDirs) {
         if (!exists(dir)) continue;
-        const bin = ['stata-mp', 'stata-se', 'stata'].map(b => path.join(dir, b)).find(exists);
+        const bin = UNIX_BINARIES.map(b => join(dir, b)).find(exists);
         if (bin) add(dir, bin);
     }
 
     const macBaseDirs = [
-        '/Applications/StataNow 20', '/Applications/StataNow20',
-        '/Applications/Stata 20', '/Applications/Stata20',
-        '/Applications/StataNow 19', '/Applications/StataNow19', '/Applications/StataNow',
-        '/Applications/Stata 19', '/Applications/Stata19',
-        '/Applications/Stata 18', '/Applications/Stata18',
-        '/Applications/Stata 17', '/Applications/Stata17',
+        ...VERSIONS.flatMap(v => [`/Applications/StataNow ${v}`, `/Applications/StataNow${v}`, `/Applications/Stata ${v}`, `/Applications/Stata${v}`]),
+        '/Applications/StataNow',
         '/Applications/Stata'
     ];
     for (const base of macBaseDirs) {
         if (!exists(base)) continue;
         for (const [app, ed] of MAC_APPS) {
-            const cliPath = path.join(base, app, 'Contents', 'MacOS', `stata-${ed}`);
-            const guiPath = path.join(base, app, 'Contents', 'MacOS', app.replace('.app', ''));
+            const cliPath = join(base, app, 'Contents', 'MacOS', `stata-${ed}`);
+            const guiPath = join(base, app, 'Contents', 'MacOS', app.replace('.app', ''));
             const bin = [cliPath, guiPath].find(exists);
             if (bin) {
                 add(base, bin, ed);
@@ -152,123 +242,35 @@ export function findStataInstallations(opts: DiscoveryOptions): StataInstallatio
         'C:\\Program Files',
         'C:\\Program Files (x86)'
     ].filter((p): p is string => !!p);
-    const winDirs = ['StataNow20', 'Stata20', 'StataNow19', 'Stata19', 'StataNow18', 'Stata18', 'Stata17', 'Stata'];
+    const winDirs = [...VERSIONS.flatMap(v => [`StataNow${v}`, `Stata${v}`]), 'StataNow', 'Stata'];
     for (const pf of programFiles) {
         for (const wd of winDirs) {
-            const dir = path.join(pf, wd);
+            const dir = join(pf, wd);
             if (!exists(dir)) continue;
-            const hit = WINDOWS_BINARIES.find(([b]) => exists(path.join(dir, b)));
-            if (hit) add(dir, path.join(dir, hit[0]), hit[1]);
+            const hit = WINDOWS_BINARIES.find(([b]) => exists(join(dir, b)));
+            if (hit) add(dir, join(dir, hit[0]), hit[1]);
         }
     }
 
+    // A Stata folder on PATH (e.g. /usr/local/stata19). Symlinks in /usr/local/bin are skipped because the
+    // folder they live in is not a Stata installation.
     const envPath = env['PATH'] || env['Path'] || '';
     for (const dir of envPath.split(path.delimiter)) {
         if (!dir) continue;
-        for (const b of ['stata-mp', 'stata-se', 'stata']) {
-            const full = path.join(dir, b);
-            if (exists(full)) {
-                add(path.dirname(dir), full);
-            }
+        const bin = UNIX_BINARIES.map(b => join(dir, b)).find(exists);
+        if (bin && exists(join(dir, 'utilities'))) {
+            add(dir, bin);
         }
     }
 
     return installations;
 }
 
-// Microsoft Store "App Execution Alias" stubs live here; running one without the
-// Store package installed prints "Python was not found" instead of starting Python.
-function isWindowsAppsDir(dir: string): boolean {
-    return /[\\/]Microsoft[\\/]WindowsApps[\\/]?$/i.test(dir);
-}
-
-function newestPythonDirs(entries: string[], pattern: RegExp): string[] {
-    const version = (name: string) => {
-        const m = name.match(/(\d+)\.?(\d+)?/);
-        if (!m) return 0;
-        const [maj, min] = m[2] !== undefined ? [+m[1], +m[2]] : [3, +m[1].replace(/^3/, '')];
-        return maj === 3 && min >= 14 ? -1 : maj * 1000 + min;
-    };
-    return entries.filter(e => pattern.test(e)).sort((a, b) => version(b) - version(a));
-}
-
+/**
+ * Best interpreter guess without running anything. The runtime manager verifies candidates by probing them
+ * (see `pythonEnv.ts`); this is only the fallback used before a probe result is available.
+ */
 export function resolvePythonExecutable(opts: PythonResolveOptions): string {
-    const { platform, env, exists, listDir } = opts;
-    const win = platform === 'win32';
-    const p = win ? path.win32 : path.posix;
-
-    if (opts.configured && exists(opts.configured)) {
-        return opts.configured;
-    }
-
-    const userHome = env.HOME || env.USERPROFILE || '';
-    if (userHome) {
-        const dedicatedVenv = win
-            ? p.join(userHome, '.local', 'share', 'positron-stata', 'venv', 'Scripts', 'python.exe')
-            : p.join(userHome, '.local', 'share', 'positron-stata', 'venv', 'bin', 'python');
-        if (exists(dedicatedVenv)) return dedicatedVenv;
-    }
-
-    const envRoots: [string | undefined, string[]][] = [
-        [env.VIRTUAL_ENV, win ? ['Scripts', 'python.exe'] : ['bin', 'python3']],
-        [env.CONDA_PREFIX, win ? ['python.exe'] : ['bin', 'python3']]
-    ];
-    for (const [root, rel] of envRoots) {
-        if (!root) continue;
-        const candidate = p.join(root, ...rel);
-        if (exists(candidate)) return candidate;
-    }
-
-    const pathDirs = (env.PATH || env.Path || '').split(win ? ';' : ':').filter(Boolean);
-    const names = win
-        ? ['python.exe', 'python3.exe']
-        : ['python3.13', 'python3.12', 'python3.11', 'python3.10', 'python3.9', 'python3', 'python'];
-    for (const name of names) {
-        for (const dir of pathDirs) {
-            if (win && isWindowsAppsDir(dir)) continue;
-            const candidate = p.join(dir, name);
-            if (exists(candidate)) return candidate;
-        }
-    }
-
-    if (win) {
-        const localAppData = env.LOCALAPPDATA;
-        if (localAppData) {
-            const base = p.join(localAppData, 'Programs', 'Python');
-            for (const dir of newestPythonDirs(safeList(listDir, base), /^Python3\d+$/i)) {
-                const candidate = p.join(base, dir, 'python.exe');
-                if (exists(candidate)) return candidate;
-            }
-            const storeBase = p.join(localAppData, 'Microsoft', 'WindowsApps');
-            for (const dir of newestPythonDirs(safeList(listDir, storeBase), /^PythonSoftwareFoundation\.Python\.3\./i)) {
-                const candidate = p.join(storeBase, dir, 'python.exe');
-                if (exists(candidate)) return candidate;
-            }
-        }
-        return 'python';
-    }
-
-    const candidates = [
-        ...['13', '12', '11', '10', '9'].flatMap(v => [
-            `/opt/homebrew/bin/python3.${v}`,
-            `/Library/Frameworks/Python.framework/Versions/3.${v}/bin/python3`,
-            `/usr/local/bin/python3.${v}`
-        ]),
-        '/usr/bin/python3',
-        '/home/linuxbrew/.linuxbrew/bin/python3',
-        '/opt/homebrew/bin/python3',
-        '/usr/local/bin/python3'
-    ];
-    for (const candidate of candidates) {
-        if (exists(candidate)) return candidate;
-    }
-    return 'python3';
-}
-
-function safeList(listDir: (p: string) => string[], dir: string): string[] {
-    try {
-        return listDir(dir);
-    } catch {
-        return [];
-    }
+    const [first] = enumeratePythonCandidates(opts).filter(c => !c.args?.length);
+    return first?.path ?? (opts.platform === 'win32' ? 'python' : 'python3');
 }

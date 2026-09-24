@@ -140,7 +140,7 @@ class _HelpHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             topic = "help"
 
         try:
-            res = self.server.help_handler.kernel.engine.execute(f"help {topic}")
+            res = self.server.help_handler.kernel.engine.execute(f"help {topic}", interactive=False)
             content = res.stdout or res.error or f"No Stata help found for topic: {topic}"
         except Exception as e:
             content = f"Error retrieving help for '{topic}': {e}"

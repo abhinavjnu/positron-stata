@@ -2,54 +2,1732 @@
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
   "name": "Stata",
   "scopeName": "source.stata",
+  "fileTypes": [
+    "do",
+    "ado",
+    "doh",
+    "mata"
+  ],
   "patterns": [
-    { "include": "#comments" },
-    { "include": "#strings" },
-    { "include": "#macros" },
-    { "include": "#keywords" },
-    { "include": "#constants" },
-    { "include": "#operators" }
+    {
+      "include": "#comments-star"
+    },
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#delimit"
+    },
+    {
+      "include": "#embedded"
+    },
+    {
+      "include": "#commands"
+    },
+    {
+      "include": "#body"
+    }
   ],
   "repository": {
+    "comments-star": {
+      "patterns": [
+        {
+          "name": "comment.line.bookmark.stata",
+          "match": "^\\s*(\\*\\*#+)\\s*(.*)$",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.comment.stata"
+            },
+            "2": {
+              "name": "markup.heading.bookmark.stata entity.name.section.stata"
+            }
+          }
+        },
+        {
+          "name": "comment.line.cell-marker.stata",
+          "match": "^\\s*(\\*\\s*%%)(.*)$",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.comment.stata"
+            },
+            "2": {
+              "name": "markup.heading.cell.stata entity.name.section.stata"
+            }
+          }
+        },
+        {
+          "name": "comment.line.star.stata",
+          "match": "^\\s*(\\*).*$",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.comment.stata"
+            }
+          }
+        }
+      ]
+    },
     "comments": {
       "patterns": [
         {
-          "name": "comment.line.continuation.stata",
-          "match": "///.*$"
+          "include": "#comment-block"
+        },
+        {
+          "begin": "(?:^|(?<=\\s))(///)([^\\n]*)\\n?",
+          "beginCaptures": {
+            "0": {
+              "name": "comment.line.triple-slash.stata"
+            },
+            "1": {
+              "name": "punctuation.definition.comment.continuation.stata"
+            }
+          },
+          "end": "(?<=\\S)(?=\\s|$)|^\\s*$",
+          "patterns": [
+            {
+              "include": "#body"
+            }
+          ]
+        },
+        {
+          "name": "comment.line.cell-marker.stata",
+          "match": "^\\s*(//\\s*%%)(.*)$",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.comment.stata"
+            },
+            "2": {
+              "name": "markup.heading.cell.stata entity.name.section.stata"
+            }
+          }
         },
         {
           "name": "comment.line.double-slash.stata",
-          "match": "//.*$"
+          "match": "(?:^|(?<=\\s))(//).*$",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.comment.stata"
+            }
+          }
+        }
+      ]
+    },
+    "comment-block": {
+      "name": "comment.block.stata",
+      "begin": "/\\*",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.comment.begin.stata"
+        }
+      },
+      "end": "\\*/",
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.comment.end.stata"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#comment-block"
+        }
+      ]
+    },
+    "delimit": {
+      "patterns": [
+        {
+          "name": "meta.delimit.semicolon.stata",
+          "begin": "^\\s*(#d(?:e(?:l(?:i(?:m(?:i(?:t)?)?)?)?)?)?)\\s+(;)",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.control.directive.delimit.stata"
+            },
+            "2": {
+              "name": "constant.language.delimiter.stata"
+            }
+          },
+          "end": "^\\s*(?=#d(?:e(?:l(?:i(?:m(?:i(?:t)?)?)?)?)?)?\\s+cr\\b)",
+          "patterns": [
+            {
+              "include": "#comments-star-bookmarks"
+            },
+            {
+              "include": "#comments"
+            },
+            {
+              "name": "comment.line.star.delimit.stata",
+              "begin": "\\*",
+              "beginCaptures": {
+                "0": {
+                  "name": "punctuation.definition.comment.stata"
+                }
+              },
+              "end": ";",
+              "endCaptures": {
+                "0": {
+                  "name": "punctuation.terminator.statement.stata"
+                }
+              }
+            },
+            {
+              "include": "#embedded"
+            },
+            {
+              "name": "meta.statement.stata",
+              "begin": "(?=[^\\s;])",
+              "end": "(;)|(?=^\\s*#d(?:e(?:l(?:i(?:m(?:i(?:t)?)?)?)?)?)?\\s+cr\\b)",
+              "endCaptures": {
+                "1": {
+                  "name": "punctuation.terminator.statement.stata"
+                }
+              },
+              "patterns": [
+                {
+                  "include": "#commands-delimit"
+                },
+                {
+                  "include": "#body"
+                }
+              ]
+            }
+          ]
         },
         {
-          "name": "comment.line.asterisk.stata",
-          "match": "^\\s*\\*.*$"
+          "match": "^\\s*(#d(?:e(?:l(?:i(?:m(?:i(?:t)?)?)?)?)?)?)\\s+(cr|;)(?=\\s|$)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.directive.delimit.stata"
+            },
+            "2": {
+              "name": "constant.language.delimiter.stata"
+            }
+          }
+        }
+      ]
+    },
+    "comments-star-bookmarks": {
+      "patterns": [
+        {
+          "name": "comment.line.bookmark.stata",
+          "match": "^\\s*(\\*\\*#+)\\s*([^;]*)",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.comment.stata"
+            },
+            "2": {
+              "name": "markup.heading.bookmark.stata entity.name.section.stata"
+            }
+          }
+        }
+      ]
+    },
+    "commands": {
+      "patterns": [
+        {
+          "match": "(?:^|(?<=[:;{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(frames?)\\s+([A-Za-z_]\\w*)\\s*(:)",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "storage.modifier.prefix.stata"
+            },
+            "3": {
+              "name": "entity.name.frame.stata"
+            },
+            "4": {
+              "name": "punctuation.separator.colon.stata"
+            }
+          }
         },
         {
-          "name": "comment.block.stata",
-          "begin": "/\\*",
-          "end": "\\*/"
+          "match": "(?:^|(?<=[:;{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(loc(?:a(?:l)?)?|gl(?:o(?:b(?:a(?:l)?)?)?)?)\\s+(\\+\\+|--)?((?:[A-Za-z0-9_]|\\x60[^'\\s]*')+)(?:\\s*(:)\\s*(?:((?:rowfullnames|colfullnames|environment|properties|constraint|rowvarlist|colvarlist|rowlfnames|collfnames|adosubdir|udstrlen|subinstr|variable|sortedby|permname|rownames|colnames|tempfile|tempname|levelsof|ustrlen|display|results|rownumb|colnumb|tempvar|strlen|format|sysdir|rowsof|colsof|tsnorm|abbrev|length|serset|words|piece|value|label|roweq|coleq|word|list|disp|type|data|char|copy|dis|val|var|lab|dir|env|set|all|di|e|r|s))(?![\\w]))?)?",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "storage.type.macro.stata"
+            },
+            "3": {
+              "name": "keyword.operator.increment.stata"
+            },
+            "4": {
+              "name": "variable.other.macro.definition.stata",
+              "patterns": [
+                {
+                  "include": "#macros"
+                }
+              ]
+            },
+            "5": {
+              "name": "punctuation.separator.colon.stata"
+            },
+            "6": {
+              "name": "support.function.macro-extended.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=[:;{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(tempvar|tempname|tempfile|args)\\s+((?:[A-Za-z_]\\w*|\\x60[^'\\s]*')(?:\\s+(?:[A-Za-z_]\\w*|\\x60[^'\\s]*'))*)",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "storage.type.macro.stata"
+            },
+            "3": {
+              "name": "variable.other.definition.stata",
+              "patterns": [
+                {
+                  "include": "#macros"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=[:;{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(sca(?:l(?:a(?:r)?)?)?)\\s+(?:(de(?:f(?:i(?:n(?:e)?)?)?)?|li(?:s(?:t)?)?|drop|dir)(?![\\w])\\s*)?([A-Za-z_]\\w*)?",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "storage.type.scalar.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            },
+            "4": {
+              "name": "variable.other.scalar.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=[:;{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(mat(?:r(?:i(?:x)?)?)?)\\s+(?:(de(?:f(?:i(?:n(?:e)?)?)?)?|in(?:p(?:u(?:t)?)?)?|li(?:s(?:t)?)?|drop|dir|ren(?:a(?:m(?:e)?)?)?|rown(?:a(?:m(?:e(?:s)?)?)?)?|coln(?:a(?:m(?:e(?:s)?)?)?)?|roweq|coleq|accum|glsaccum|opaccum|vecaccum|dis(?:s(?:i(?:m(?:i(?:l(?:a(?:r(?:i(?:t(?:y)?)?)?)?)?)?)?)?)?)?|eigenvalues|symeigen|svd|score|post)(?![\\w])\\s*)?([A-Za-z_]\\w*)?",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "storage.type.matrix.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            },
+            "4": {
+              "name": "variable.other.matrix.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=[:;{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(g(?:e(?:n(?:e(?:r(?:a(?:t(?:e)?)?)?)?)?)?)?|replace|clonevar)\\s+(?:((?:byte|int|long|float|double|strL|str[1-9][0-9]{0,3}))\\s+)?([A-Za-z_]\\w*)(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.command.stata"
+            },
+            "3": {
+              "name": "storage.type.stata"
+            },
+            "4": {
+              "name": "variable.other.definition.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=[:;{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(egen)\\s+(?:((?:byte|int|long|float|double|strL|str[1-9][0-9]{0,3}))\\s+)?([A-Za-z_]\\w*)(?:\\s*(=)\\s*(?:((?:rownonmiss|rowmedian|rowpctile|anycount|anymatch|anyvalue|rowfirst|rowtotal|rowlast|rowmean|rowmiss|concat|median|pctile|rowmax|rowmin|count|group|rowsd|total|nvals|xtile|diff|ends|fill|kurt|mdev|mean|mode|rank|skew|cut|iqr|mad|max|min|mtr|seq|std|tag|sum|pc|sd))|([A-Za-z_]\\w*))(?=\\s*\\())?",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.command.stata"
+            },
+            "3": {
+              "name": "storage.type.stata"
+            },
+            "4": {
+              "name": "variable.other.definition.stata"
+            },
+            "5": {
+              "name": "keyword.operator.assignment.stata"
+            },
+            "6": {
+              "name": "support.function.egen.stata"
+            },
+            "7": {
+              "name": "support.function.egen.user.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=[:;{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(foreach)\\s+([A-Za-z_]\\w*)\\s+(?:(in)|(of)\\s+(local|global|varlist|newlist|numlist))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.control.loop.stata"
+            },
+            "3": {
+              "name": "variable.other.loop.stata"
+            },
+            "4": {
+              "name": "keyword.control.loop.stata"
+            },
+            "5": {
+              "name": "keyword.control.loop.stata"
+            },
+            "6": {
+              "name": "storage.type.list.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=[:;{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(forv(?:a(?:l(?:u(?:e(?:s)?)?)?)?)?)\\s+([A-Za-z_]\\w*)\\s*(=)",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.control.loop.stata"
+            },
+            "3": {
+              "name": "variable.other.loop.stata"
+            },
+            "4": {
+              "name": "keyword.operator.assignment.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=[:;{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(pr(?:o(?:g(?:r(?:a(?:m)?)?)?)?)?)(?:\\s+(de(?:f(?:i(?:n(?:e)?)?)?)?|drop|dir|l(?:i(?:s(?:t)?)?)?)(?![\\w]))?(?:\\s+(?!(?:rclass|eclass|sclass|nclass|byable|properties|sortpreserve|plugin)\\b)([A-Za-z_][\\w.]*))?",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.program.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            },
+            "4": {
+              "name": "entity.name.function.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=[:;{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(gettoken)\\s+([^:]*?)\\s*(:)\\s*",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.program.stata"
+            },
+            "3": {
+              "patterns": [
+                {
+                  "include": "#macros"
+                },
+                {
+                  "match": "[A-Za-z_]\\w*",
+                  "name": "variable.other.definition.stata"
+                }
+              ]
+            },
+            "4": {
+              "name": "punctuation.separator.colon.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=[:;{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(gr(?:a(?:p(?:h)?)?)?)\\s+(?:(tw(?:o(?:w(?:a(?:y)?)?)?)?)(?:\\s+((?:contourline|rconnected|connected|pcscatter|histogram|scatteri|dropline|rscatter|pccapsym|pcbarrow|pcarrowi|function|kdensity|scatter|rcapsym|pcspike|pcarrow|tsrline|contour|mspline|fpfitci|lpolyci|rspike|tsline|lowess|lfitci|qfitci|spike|rarea|rline|mband|fpfit|lpoly|line|area|rbar|rcap|lfit|qfit|bar|dot|pci)))?|((?:describe|combine|display|matrix|export|rename|replay|close|query|print|hbar|hbox|save|drop|copy|bar|box|dot|pie|use|dir|set)))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.command.graphics.stata"
+            },
+            "3": {
+              "name": "keyword.other.command.graphics.stata"
+            },
+            "4": {
+              "name": "support.function.plottype.stata"
+            },
+            "5": {
+              "name": "keyword.other.subcommand.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=[:;{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(tw(?:o(?:w(?:a(?:y)?)?)?)?)\\s+((?:contourline|rconnected|connected|pcscatter|histogram|scatteri|dropline|rscatter|pccapsym|pcbarrow|pcarrowi|function|kdensity|scatter|rcapsym|pcspike|pcarrow|tsrline|contour|mspline|fpfitci|lpolyci|rspike|tsline|lowess|lfitci|qfitci|spike|rarea|rline|mband|fpfit|lpoly|line|area|rbar|rcap|lfit|qfit|bar|dot|pci))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.command.graphics.stata"
+            },
+            "3": {
+              "name": "support.function.plottype.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=[:;{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(est(?:i(?:m(?:a(?:t(?:e(?:s)?)?)?)?)?)?)\\s+((?:r(?:e(?:s(?:t(?:o(?:r(?:e)?)?)?)?)?)?|describe|esample|sto(?:r(?:e)?)?|replay|table|stats|clear|title|notes|query|drop|save|tab|dir|use|for))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.command.postestimation.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=[:;{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(la(?:b(?:e(?:l)?)?)?)\\s+((?:var(?:i(?:a(?:b(?:l(?:e)?)?)?)?)?|language|de(?:f(?:i(?:n(?:e)?)?)?)?|val(?:u(?:e(?:s)?)?)?|li(?:s(?:t)?)?|data|drop|save|copy|dir))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.command.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=[:;{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(frame)\\s+((?:create|change|rename|prefix|reset|copy|drop|post|dir|put|pwf|cwf))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.command.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=[:;{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(collect)\\s+((?:levelsof|describe|preview|combine|addtags|create|rename|layout|export|recode|clear|style|label|query|notes|title|remap|copy|drop|save|dims|dir|get|use|set))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.command.postestimation.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=[:;{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(mi)\\s+((?:testtransform|unregister|misstable|register|describe|varying|convert|extract|reshape|impute|append|expand|rename|update|merge|fvset|reset|tsset|xtset|stset|test|set))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.command.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=[:;{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(ret(?:u(?:r(?:n)?)?)?)\\s+((?:scalar|matrix|clear|local|list|post|add))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.program.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=[:;{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(eret(?:u(?:r(?:n)?)?)?)\\s+((?:display|repost|scalar|matrix|clear|local|post|list))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.program.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=[:;{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(sret(?:u(?:r(?:n)?)?)?)\\s+((?:clear|local|list))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.program.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=[:;{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(python)\\s+((?:describe|script|search|query|which|clear|set))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.program.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=[:;{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(putexcel)\\s+((?:describe|clear|save|set))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.command.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=[:;{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(putdocx)\\s+((?:sectionbreak|paragraph|pagebreak|textblock|describe|textfile|append|begin|clear|table|image|save|text))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.command.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=[:;{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(putpdf)\\s+((?:sectionbreak|paragraph|pagebreak|describe|begin|clear|table|image|save|text))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.command.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=[:;{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(file)\\s+((?:write|close|query|open|read|seek))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.program.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=[:;{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(log)\\s+((?:using|close|query|off|on))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.program.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=[:;{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(ma(?:c(?:r(?:o)?)?)?)\\s+((?:shift|drop|list|dir))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.program.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=[:;{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(estat)\\s+((?:classification|grangerplot|endogenous|firststage|trendplots|summarize|durbinalt|bgodfrey|hettest|dwatson|sbcusum|ptrends|ovtest|imtest|archlm|overid|phtest|esize|vce|gof|vif|ic|sd))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.command.postestimation.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=[:;{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(?:((?:mi\\s+est(?:i(?:m(?:a(?:t(?:e)?)?)?)?)?|mi\\s+passive|bootstrap|jackknife|sim(?:u(?:l(?:a(?:t(?:e)?)?)?)?)?|qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|stepwise|bys(?:o(?:r(?:t)?)?)?|permute|rolling|statsby|nestreg|nobreak|mi\\s+xeq|bayes|svy|mfp|by|xi|bs|jk|sw|fp))|((?:forv(?:a(?:l(?:u(?:e(?:s)?)?)?)?)?|continue|foreach|while|break|exit))|((?:capture_log|marksample|viewsource|postclose|translate|adoupdate|pr(?:o(?:g(?:r(?:a(?:m)?)?)?)?)?|tokenize|gettoken|conf(?:i(?:r(?:m)?)?)?|eret(?:u(?:r(?:n)?)?)?|sret(?:u(?:r(?:n)?)?)?|cret(?:u(?:r(?:n)?)?)?|vers(?:i(?:o(?:n)?)?)?|javacall|di(?:s(?:p(?:l(?:a(?:y)?)?)?)?)?|tempname|tempfile|postfile|fvexpand|_rmdcoll|levelsof|preserve|snapshot|markout|ret(?:u(?:r(?:n)?)?)?|include|gl(?:o(?:b(?:a(?:l)?)?)?)?|tempvar|sca(?:l(?:a(?:r)?)?)?|mat(?:r(?:i(?:x)?)?)?|discard|numlist|_rmcoll|putmata|getmata|adopath|winexec|creturn|restore|syntax|assert|ma(?:c(?:r(?:o)?)?)?|python|loc(?:a(?:l)?)?|plugin|tsunab|fvunab|serset|window|dialog|cmdlog|memory|search|findit|update|sysdir|xshell|error|which|timer|class|sleep|pause|query|about|mkdir|rmdir|erase|shell|clear|args|mark|mata|java|post|file|unab|char|beep|more|help|copy|type|end|run|set|log|ssc|net|ado|pwd|dir|cls|do|ru|db|cd|ls|rm))|((?:eventstudyinteract|did_multiplegt|did_imputation|xthdidregress|xtdidregress|xpoivregress|cmxtmixlogit|heckoprobit|hdidregress|poivregress|bayesselect|spivregress|spxtregress|tetrachoric|xtfrontier|didregress|stteffects|elasticnet|xporegress|xpopoisson|bmaregress|cmmixlogit|asroprobit|hetoprobit|xtunitroot|polychoric|hetprobit|zioprobit|xtcloglog|xtpoisson|xtoprobit|xtheckman|ivregress|ivpoisson|mepoisson|meoprobit|mecloglog|ivreghdfe|etregress|etpoisson|eteffects|sqrtlasso|dsregress|dspoisson|poregress|popoisson|npregress|asmprobit|expoisson|mean_test|spregress|threshold|reg(?:r(?:e(?:s(?:s)?)?)?)?|logistic|biprobit|tpoisson|truncreg|heckprob|xtprobit|xtabond2|xtdpdsys|xtologit|xtintreg|ivprobit|meprobit|meologit|meintreg|stintreg|ppmlhdfe|rdrobust|teffects|signrank|xpologit|boottest|cmclogit|asclogit|sfrancia|ksmirnov|oprobit|mprobit|cloglog|poisson|heckman|xtlogit|xtnbreg|xtivreg|xtabond|xtmixed|xttobit|xtregar|ivtobit|melogit|menbreg|metobit|mestreg|stcrreg|reghdfe|prtesti|ranksum|kwallis|tabodds|dfactor|betareg|fracreg|dslogit|pologit|telasso|bayesmh|discrim|cluster|rologit|exlogit|churdle|mswitch|dfuller|pperron|probit|ologit|mlogit|clogit|scobit|gnbreg|tnbreg|intreg|bsqreg|xtpcse|ivreg2|binreg|rdplot|manova|oneway|ttesti|prtest|median|mhodds|arfima|sspace|cnsreg|kmeans|factor|nlogit|slogit|sktest|bitest|logit|nbreg|tobit|sqreg|iqreg|xtreg|xtdpd|xtgls|xtgee|xtscc|ivreg|mixed|meglm|stcox|streg|csdid|jwdid|synth|nlsur|sureg|mvreg|anova|ttest|arima|newey|prais|lasso|h2oml|canon|stset|swilk|alpha|zinb|ztnb|qreg|xtrc|gsem|areg|ppml|sdid|reg3|arch|svar|rreg|cate|vwls|kpss|meta|zip|ztp|gmm|sem|glm|var|vec|ucm|pca|mds|sts|icc|irt|nl|cc|cs|ir))|((?:marginsplot|est(?:i(?:m(?:a(?:t(?:e(?:s)?)?)?)?)?)?|predictnl|pwcompare|testparm|coefplot|contrast|forecast|linktest|lvr2plot|acprplot|listcoef|prchange|predict|margins|estpost|outreg2|hausman|rvfplot|rvpplot|avplots|cprplot|collect|fitstat|testnl|lincom|eststo|esttab|estout|estadd|outreg|lrtest|dfbeta|avplot|etable|nlcom|estat|estfe|asdoc|suest|lsens|lstat|test|lroc|vif|mfx))|((?:hist(?:o(?:g(?:r(?:a(?:m)?)?)?)?)?|binscatter|set_scheme|connected|spikeplot|sunflower|stripplot|sc(?:a(?:t(?:t(?:e(?:r)?)?)?)?)?|kdensity|quantile|heatplot|tw(?:o(?:w(?:a(?:y)?)?)?)?|symplot|gladder|qladder|dotplot|binsreg|tsrline|pergram|stcurve|grc1leg|grstyle|gr(?:a(?:p(?:h)?)?)?|lowess|qqplot|tsline|xtline|roctab|lpoly|qnorm|pnorm|cumul|line|qchi|pchi|pac|ac))|((?:datasignature|xtdes(?:c(?:r(?:i(?:b(?:e)?)?)?)?)?|fillmissing|h2oml_frame|duplicates|su(?:m(?:m(?:a(?:r(?:i(?:z(?:e)?)?)?)?)?)?)?|proportion|cor(?:r(?:e(?:l(?:a(?:t(?:e)?)?)?)?)?)?|stdescribe|lasso_data|d(?:e(?:s(?:c(?:r(?:i(?:b(?:e)?)?)?)?)?)?)?|g(?:e(?:n(?:e(?:r(?:a(?:t(?:e)?)?)?)?)?)?)?|ta(?:b(?:u(?:l(?:a(?:t(?:e)?)?)?)?)?)?|misstable|outs(?:h(?:e(?:e(?:t)?)?)?)?|rangestat|gcollapse|fcollapse|unzipfile|labelbook|bcollapse|codebook|ins(?:p(?:e(?:c(?:t)?)?)?)?|collapse|contract|expandcl|destring|tostring|compress|distinct|spearman|mvencode|mvdecode|separate|insh(?:e(?:e(?:t)?)?)?|putexcel|markdown|tsappend|tsreport|checksum|clonevar|greshape|describe|hashsort|numlabel|uselabel|saveold|br(?:o(?:w(?:s(?:e)?)?)?)?|replace|app(?:e(?:n(?:d)?)?)?|reshape|ren(?:a(?:m(?:e)?)?)?|lookfor|tabstat|centile|xmlsave|putdocx|dyntext|stsplit|streset|tsrevar|fralias|collect|winsor2|compare|zipfile|sysuse|webuse|joinby|expand|fillin|format|la(?:b(?:e(?:l)?)?)?|encode|decode|recode|recast|cou(?:n(?:t)?)?|pctile|pwcorr|sample|infile|import|export|xmluse|putpdf|dyndoc|stjoin|stvary|svyset|tsfill|frames|frlink|etable|dtable|gtools|unique|groups|elabel|sa(?:v(?:e)?)?|l(?:i(?:s(?:t)?)?)?|ed(?:i(?:t)?)?|gsort|merge|cross|xpose|stack|order|notes|table|ratio|total|xtile|split|infix|xtset|tsset|stset|stsum|xtsum|xttab|frame|frget|frput|gegen|sumup|u(?:s(?:e)?)?|egen|drop|keep|sort|move|note|isid|tab1|tab2|tabi|mean|ktau|odbc|cii|cwf|pwf|fre|h2o|ds|ci|mi|cf|vl)))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "storage.modifier.prefix.stata"
+            },
+            "3": {
+              "name": "keyword.control.flow.stata"
+            },
+            "4": {
+              "name": "keyword.other.program.stata"
+            },
+            "5": {
+              "name": "keyword.other.command.estimation.stata"
+            },
+            "6": {
+              "name": "keyword.other.command.postestimation.stata"
+            },
+            "7": {
+              "name": "keyword.other.command.graphics.stata"
+            },
+            "8": {
+              "name": "keyword.other.command.stata"
+            }
+          }
+        }
+      ]
+    },
+    "commands-delimit": {
+      "patterns": [
+        {
+          "match": "(?:\\G|(?<=[:{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(frames?)\\s+([A-Za-z_]\\w*)\\s*(:)",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "storage.modifier.prefix.stata"
+            },
+            "3": {
+              "name": "entity.name.frame.stata"
+            },
+            "4": {
+              "name": "punctuation.separator.colon.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:\\G|(?<=[:{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(loc(?:a(?:l)?)?|gl(?:o(?:b(?:a(?:l)?)?)?)?)\\s+(\\+\\+|--)?((?:[A-Za-z0-9_]|\\x60[^'\\s]*')+)(?:\\s*(:)\\s*(?:((?:rowfullnames|colfullnames|environment|properties|constraint|rowvarlist|colvarlist|rowlfnames|collfnames|adosubdir|udstrlen|subinstr|variable|sortedby|permname|rownames|colnames|tempfile|tempname|levelsof|ustrlen|display|results|rownumb|colnumb|tempvar|strlen|format|sysdir|rowsof|colsof|tsnorm|abbrev|length|serset|words|piece|value|label|roweq|coleq|word|list|disp|type|data|char|copy|dis|val|var|lab|dir|env|set|all|di|e|r|s))(?![\\w]))?)?",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "storage.type.macro.stata"
+            },
+            "3": {
+              "name": "keyword.operator.increment.stata"
+            },
+            "4": {
+              "name": "variable.other.macro.definition.stata",
+              "patterns": [
+                {
+                  "include": "#macros"
+                }
+              ]
+            },
+            "5": {
+              "name": "punctuation.separator.colon.stata"
+            },
+            "6": {
+              "name": "support.function.macro-extended.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:\\G|(?<=[:{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(tempvar|tempname|tempfile|args)\\s+((?:[A-Za-z_]\\w*|\\x60[^'\\s]*')(?:\\s+(?:[A-Za-z_]\\w*|\\x60[^'\\s]*'))*)",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "storage.type.macro.stata"
+            },
+            "3": {
+              "name": "variable.other.definition.stata",
+              "patterns": [
+                {
+                  "include": "#macros"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "match": "(?:\\G|(?<=[:{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(sca(?:l(?:a(?:r)?)?)?)\\s+(?:(de(?:f(?:i(?:n(?:e)?)?)?)?|li(?:s(?:t)?)?|drop|dir)(?![\\w])\\s*)?([A-Za-z_]\\w*)?",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "storage.type.scalar.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            },
+            "4": {
+              "name": "variable.other.scalar.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:\\G|(?<=[:{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(mat(?:r(?:i(?:x)?)?)?)\\s+(?:(de(?:f(?:i(?:n(?:e)?)?)?)?|in(?:p(?:u(?:t)?)?)?|li(?:s(?:t)?)?|drop|dir|ren(?:a(?:m(?:e)?)?)?|rown(?:a(?:m(?:e(?:s)?)?)?)?|coln(?:a(?:m(?:e(?:s)?)?)?)?|roweq|coleq|accum|glsaccum|opaccum|vecaccum|dis(?:s(?:i(?:m(?:i(?:l(?:a(?:r(?:i(?:t(?:y)?)?)?)?)?)?)?)?)?)?|eigenvalues|symeigen|svd|score|post)(?![\\w])\\s*)?([A-Za-z_]\\w*)?",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "storage.type.matrix.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            },
+            "4": {
+              "name": "variable.other.matrix.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:\\G|(?<=[:{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(g(?:e(?:n(?:e(?:r(?:a(?:t(?:e)?)?)?)?)?)?)?|replace|clonevar)\\s+(?:((?:byte|int|long|float|double|strL|str[1-9][0-9]{0,3}))\\s+)?([A-Za-z_]\\w*)(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.command.stata"
+            },
+            "3": {
+              "name": "storage.type.stata"
+            },
+            "4": {
+              "name": "variable.other.definition.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:\\G|(?<=[:{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(egen)\\s+(?:((?:byte|int|long|float|double|strL|str[1-9][0-9]{0,3}))\\s+)?([A-Za-z_]\\w*)(?:\\s*(=)\\s*(?:((?:rownonmiss|rowmedian|rowpctile|anycount|anymatch|anyvalue|rowfirst|rowtotal|rowlast|rowmean|rowmiss|concat|median|pctile|rowmax|rowmin|count|group|rowsd|total|nvals|xtile|diff|ends|fill|kurt|mdev|mean|mode|rank|skew|cut|iqr|mad|max|min|mtr|seq|std|tag|sum|pc|sd))|([A-Za-z_]\\w*))(?=\\s*\\())?",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.command.stata"
+            },
+            "3": {
+              "name": "storage.type.stata"
+            },
+            "4": {
+              "name": "variable.other.definition.stata"
+            },
+            "5": {
+              "name": "keyword.operator.assignment.stata"
+            },
+            "6": {
+              "name": "support.function.egen.stata"
+            },
+            "7": {
+              "name": "support.function.egen.user.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:\\G|(?<=[:{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(foreach)\\s+([A-Za-z_]\\w*)\\s+(?:(in)|(of)\\s+(local|global|varlist|newlist|numlist))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.control.loop.stata"
+            },
+            "3": {
+              "name": "variable.other.loop.stata"
+            },
+            "4": {
+              "name": "keyword.control.loop.stata"
+            },
+            "5": {
+              "name": "keyword.control.loop.stata"
+            },
+            "6": {
+              "name": "storage.type.list.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:\\G|(?<=[:{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(forv(?:a(?:l(?:u(?:e(?:s)?)?)?)?)?)\\s+([A-Za-z_]\\w*)\\s*(=)",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.control.loop.stata"
+            },
+            "3": {
+              "name": "variable.other.loop.stata"
+            },
+            "4": {
+              "name": "keyword.operator.assignment.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:\\G|(?<=[:{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(pr(?:o(?:g(?:r(?:a(?:m)?)?)?)?)?)(?:\\s+(de(?:f(?:i(?:n(?:e)?)?)?)?|drop|dir|l(?:i(?:s(?:t)?)?)?)(?![\\w]))?(?:\\s+(?!(?:rclass|eclass|sclass|nclass|byable|properties|sortpreserve|plugin)\\b)([A-Za-z_][\\w.]*))?",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.program.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            },
+            "4": {
+              "name": "entity.name.function.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:\\G|(?<=[:{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(gettoken)\\s+([^:]*?)\\s*(:)\\s*",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.program.stata"
+            },
+            "3": {
+              "patterns": [
+                {
+                  "include": "#macros"
+                },
+                {
+                  "match": "[A-Za-z_]\\w*",
+                  "name": "variable.other.definition.stata"
+                }
+              ]
+            },
+            "4": {
+              "name": "punctuation.separator.colon.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:\\G|(?<=[:{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(gr(?:a(?:p(?:h)?)?)?)\\s+(?:(tw(?:o(?:w(?:a(?:y)?)?)?)?)(?:\\s+((?:contourline|rconnected|connected|pcscatter|histogram|scatteri|dropline|rscatter|pccapsym|pcbarrow|pcarrowi|function|kdensity|scatter|rcapsym|pcspike|pcarrow|tsrline|contour|mspline|fpfitci|lpolyci|rspike|tsline|lowess|lfitci|qfitci|spike|rarea|rline|mband|fpfit|lpoly|line|area|rbar|rcap|lfit|qfit|bar|dot|pci)))?|((?:describe|combine|display|matrix|export|rename|replay|close|query|print|hbar|hbox|save|drop|copy|bar|box|dot|pie|use|dir|set)))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.command.graphics.stata"
+            },
+            "3": {
+              "name": "keyword.other.command.graphics.stata"
+            },
+            "4": {
+              "name": "support.function.plottype.stata"
+            },
+            "5": {
+              "name": "keyword.other.subcommand.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:\\G|(?<=[:{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(tw(?:o(?:w(?:a(?:y)?)?)?)?)\\s+((?:contourline|rconnected|connected|pcscatter|histogram|scatteri|dropline|rscatter|pccapsym|pcbarrow|pcarrowi|function|kdensity|scatter|rcapsym|pcspike|pcarrow|tsrline|contour|mspline|fpfitci|lpolyci|rspike|tsline|lowess|lfitci|qfitci|spike|rarea|rline|mband|fpfit|lpoly|line|area|rbar|rcap|lfit|qfit|bar|dot|pci))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.command.graphics.stata"
+            },
+            "3": {
+              "name": "support.function.plottype.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:\\G|(?<=[:{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(est(?:i(?:m(?:a(?:t(?:e(?:s)?)?)?)?)?)?)\\s+((?:r(?:e(?:s(?:t(?:o(?:r(?:e)?)?)?)?)?)?|describe|esample|sto(?:r(?:e)?)?|replay|table|stats|clear|title|notes|query|drop|save|tab|dir|use|for))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.command.postestimation.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:\\G|(?<=[:{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(la(?:b(?:e(?:l)?)?)?)\\s+((?:var(?:i(?:a(?:b(?:l(?:e)?)?)?)?)?|language|de(?:f(?:i(?:n(?:e)?)?)?)?|val(?:u(?:e(?:s)?)?)?|li(?:s(?:t)?)?|data|drop|save|copy|dir))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.command.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:\\G|(?<=[:{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(frame)\\s+((?:create|change|rename|prefix|reset|copy|drop|post|dir|put|pwf|cwf))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.command.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:\\G|(?<=[:{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(collect)\\s+((?:levelsof|describe|preview|combine|addtags|create|rename|layout|export|recode|clear|style|label|query|notes|title|remap|copy|drop|save|dims|dir|get|use|set))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.command.postestimation.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:\\G|(?<=[:{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(mi)\\s+((?:testtransform|unregister|misstable|register|describe|varying|convert|extract|reshape|impute|append|expand|rename|update|merge|fvset|reset|tsset|xtset|stset|test|set))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.command.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:\\G|(?<=[:{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(ret(?:u(?:r(?:n)?)?)?)\\s+((?:scalar|matrix|clear|local|list|post|add))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.program.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:\\G|(?<=[:{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(eret(?:u(?:r(?:n)?)?)?)\\s+((?:display|repost|scalar|matrix|clear|local|post|list))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.program.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:\\G|(?<=[:{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(sret(?:u(?:r(?:n)?)?)?)\\s+((?:clear|local|list))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.program.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:\\G|(?<=[:{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(python)\\s+((?:describe|script|search|query|which|clear|set))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.program.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:\\G|(?<=[:{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(putexcel)\\s+((?:describe|clear|save|set))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.command.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:\\G|(?<=[:{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(putdocx)\\s+((?:sectionbreak|paragraph|pagebreak|textblock|describe|textfile|append|begin|clear|table|image|save|text))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.command.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:\\G|(?<=[:{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(putpdf)\\s+((?:sectionbreak|paragraph|pagebreak|describe|begin|clear|table|image|save|text))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.command.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:\\G|(?<=[:{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(file)\\s+((?:write|close|query|open|read|seek))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.program.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:\\G|(?<=[:{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(log)\\s+((?:using|close|query|off|on))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.program.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:\\G|(?<=[:{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(ma(?:c(?:r(?:o)?)?)?)\\s+((?:shift|drop|list|dir))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.program.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:\\G|(?<=[:{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(estat)\\s+((?:classification|grangerplot|endogenous|firststage|trendplots|summarize|durbinalt|bgodfrey|hettest|dwatson|sbcusum|ptrends|ovtest|imtest|archlm|overid|phtest|esize|vce|gof|vif|ic|sd))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.other.command.postestimation.stata"
+            },
+            "3": {
+              "name": "keyword.other.subcommand.stata"
+            }
+          }
+        },
+        {
+          "match": "(?:\\G|(?<=[:{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(?:((?:mi\\s+est(?:i(?:m(?:a(?:t(?:e)?)?)?)?)?|mi\\s+passive|bootstrap|jackknife|sim(?:u(?:l(?:a(?:t(?:e)?)?)?)?)?|qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|stepwise|bys(?:o(?:r(?:t)?)?)?|permute|rolling|statsby|nestreg|nobreak|mi\\s+xeq|bayes|svy|mfp|by|xi|bs|jk|sw|fp))|((?:forv(?:a(?:l(?:u(?:e(?:s)?)?)?)?)?|continue|foreach|while|break|exit))|((?:capture_log|marksample|viewsource|postclose|translate|adoupdate|pr(?:o(?:g(?:r(?:a(?:m)?)?)?)?)?|tokenize|gettoken|conf(?:i(?:r(?:m)?)?)?|eret(?:u(?:r(?:n)?)?)?|sret(?:u(?:r(?:n)?)?)?|cret(?:u(?:r(?:n)?)?)?|vers(?:i(?:o(?:n)?)?)?|javacall|di(?:s(?:p(?:l(?:a(?:y)?)?)?)?)?|tempname|tempfile|postfile|fvexpand|_rmdcoll|levelsof|preserve|snapshot|markout|ret(?:u(?:r(?:n)?)?)?|include|gl(?:o(?:b(?:a(?:l)?)?)?)?|tempvar|sca(?:l(?:a(?:r)?)?)?|mat(?:r(?:i(?:x)?)?)?|discard|numlist|_rmcoll|putmata|getmata|adopath|winexec|creturn|restore|syntax|assert|ma(?:c(?:r(?:o)?)?)?|python|loc(?:a(?:l)?)?|plugin|tsunab|fvunab|serset|window|dialog|cmdlog|memory|search|findit|update|sysdir|xshell|error|which|timer|class|sleep|pause|query|about|mkdir|rmdir|erase|shell|clear|args|mark|mata|java|post|file|unab|char|beep|more|help|copy|type|end|run|set|log|ssc|net|ado|pwd|dir|cls|do|ru|db|cd|ls|rm))|((?:eventstudyinteract|did_multiplegt|did_imputation|xthdidregress|xtdidregress|xpoivregress|cmxtmixlogit|heckoprobit|hdidregress|poivregress|bayesselect|spivregress|spxtregress|tetrachoric|xtfrontier|didregress|stteffects|elasticnet|xporegress|xpopoisson|bmaregress|cmmixlogit|asroprobit|hetoprobit|xtunitroot|polychoric|hetprobit|zioprobit|xtcloglog|xtpoisson|xtoprobit|xtheckman|ivregress|ivpoisson|mepoisson|meoprobit|mecloglog|ivreghdfe|etregress|etpoisson|eteffects|sqrtlasso|dsregress|dspoisson|poregress|popoisson|npregress|asmprobit|expoisson|mean_test|spregress|threshold|reg(?:r(?:e(?:s(?:s)?)?)?)?|logistic|biprobit|tpoisson|truncreg|heckprob|xtprobit|xtabond2|xtdpdsys|xtologit|xtintreg|ivprobit|meprobit|meologit|meintreg|stintreg|ppmlhdfe|rdrobust|teffects|signrank|xpologit|boottest|cmclogit|asclogit|sfrancia|ksmirnov|oprobit|mprobit|cloglog|poisson|heckman|xtlogit|xtnbreg|xtivreg|xtabond|xtmixed|xttobit|xtregar|ivtobit|melogit|menbreg|metobit|mestreg|stcrreg|reghdfe|prtesti|ranksum|kwallis|tabodds|dfactor|betareg|fracreg|dslogit|pologit|telasso|bayesmh|discrim|cluster|rologit|exlogit|churdle|mswitch|dfuller|pperron|probit|ologit|mlogit|clogit|scobit|gnbreg|tnbreg|intreg|bsqreg|xtpcse|ivreg2|binreg|rdplot|manova|oneway|ttesti|prtest|median|mhodds|arfima|sspace|cnsreg|kmeans|factor|nlogit|slogit|sktest|bitest|logit|nbreg|tobit|sqreg|iqreg|xtreg|xtdpd|xtgls|xtgee|xtscc|ivreg|mixed|meglm|stcox|streg|csdid|jwdid|synth|nlsur|sureg|mvreg|anova|ttest|arima|newey|prais|lasso|h2oml|canon|stset|swilk|alpha|zinb|ztnb|qreg|xtrc|gsem|areg|ppml|sdid|reg3|arch|svar|rreg|cate|vwls|kpss|meta|zip|ztp|gmm|sem|glm|var|vec|ucm|pca|mds|sts|icc|irt|nl|cc|cs|ir))|((?:marginsplot|est(?:i(?:m(?:a(?:t(?:e(?:s)?)?)?)?)?)?|predictnl|pwcompare|testparm|coefplot|contrast|forecast|linktest|lvr2plot|acprplot|listcoef|prchange|predict|margins|estpost|outreg2|hausman|rvfplot|rvpplot|avplots|cprplot|collect|fitstat|testnl|lincom|eststo|esttab|estout|estadd|outreg|lrtest|dfbeta|avplot|etable|nlcom|estat|estfe|asdoc|suest|lsens|lstat|test|lroc|vif|mfx))|((?:hist(?:o(?:g(?:r(?:a(?:m)?)?)?)?)?|binscatter|set_scheme|connected|spikeplot|sunflower|stripplot|sc(?:a(?:t(?:t(?:e(?:r)?)?)?)?)?|kdensity|quantile|heatplot|tw(?:o(?:w(?:a(?:y)?)?)?)?|symplot|gladder|qladder|dotplot|binsreg|tsrline|pergram|stcurve|grc1leg|grstyle|gr(?:a(?:p(?:h)?)?)?|lowess|qqplot|tsline|xtline|roctab|lpoly|qnorm|pnorm|cumul|line|qchi|pchi|pac|ac))|((?:datasignature|xtdes(?:c(?:r(?:i(?:b(?:e)?)?)?)?)?|fillmissing|h2oml_frame|duplicates|su(?:m(?:m(?:a(?:r(?:i(?:z(?:e)?)?)?)?)?)?)?|proportion|cor(?:r(?:e(?:l(?:a(?:t(?:e)?)?)?)?)?)?|stdescribe|lasso_data|d(?:e(?:s(?:c(?:r(?:i(?:b(?:e)?)?)?)?)?)?)?|g(?:e(?:n(?:e(?:r(?:a(?:t(?:e)?)?)?)?)?)?)?|ta(?:b(?:u(?:l(?:a(?:t(?:e)?)?)?)?)?)?|misstable|outs(?:h(?:e(?:e(?:t)?)?)?)?|rangestat|gcollapse|fcollapse|unzipfile|labelbook|bcollapse|codebook|ins(?:p(?:e(?:c(?:t)?)?)?)?|collapse|contract|expandcl|destring|tostring|compress|distinct|spearman|mvencode|mvdecode|separate|insh(?:e(?:e(?:t)?)?)?|putexcel|markdown|tsappend|tsreport|checksum|clonevar|greshape|describe|hashsort|numlabel|uselabel|saveold|br(?:o(?:w(?:s(?:e)?)?)?)?|replace|app(?:e(?:n(?:d)?)?)?|reshape|ren(?:a(?:m(?:e)?)?)?|lookfor|tabstat|centile|xmlsave|putdocx|dyntext|stsplit|streset|tsrevar|fralias|collect|winsor2|compare|zipfile|sysuse|webuse|joinby|expand|fillin|format|la(?:b(?:e(?:l)?)?)?|encode|decode|recode|recast|cou(?:n(?:t)?)?|pctile|pwcorr|sample|infile|import|export|xmluse|putpdf|dyndoc|stjoin|stvary|svyset|tsfill|frames|frlink|etable|dtable|gtools|unique|groups|elabel|sa(?:v(?:e)?)?|l(?:i(?:s(?:t)?)?)?|ed(?:i(?:t)?)?|gsort|merge|cross|xpose|stack|order|notes|table|ratio|total|xtile|split|infix|xtset|tsset|stset|stsum|xtsum|xttab|frame|frget|frput|gegen|sumup|u(?:s(?:e)?)?|egen|drop|keep|sort|move|note|isid|tab1|tab2|tabi|mean|ktau|odbc|cii|cwf|pwf|fre|h2o|ds|ci|mi|cf|vl)))(?![\\w])",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "storage.modifier.prefix.stata"
+            },
+            "3": {
+              "name": "keyword.control.flow.stata"
+            },
+            "4": {
+              "name": "keyword.other.program.stata"
+            },
+            "5": {
+              "name": "keyword.other.command.estimation.stata"
+            },
+            "6": {
+              "name": "keyword.other.command.postestimation.stata"
+            },
+            "7": {
+              "name": "keyword.other.command.graphics.stata"
+            },
+            "8": {
+              "name": "keyword.other.command.stata"
+            }
+          }
+        }
+      ]
+    },
+    "embedded": {
+      "patterns": [
+        {
+          "name": "meta.block.mata.stata",
+          "begin": "(?:^|(?<=[:;{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(mata)(?:\\s*(,)\\s*[A-Za-z]+)?\\s*(:)?\\s*(?=$|//|/\\*)",
+          "beginCaptures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.control.embedded.mata.stata"
+            },
+            "3": {
+              "name": "punctuation.separator.comma.stata"
+            },
+            "4": {
+              "name": "punctuation.separator.colon.stata"
+            }
+          },
+          "end": "^\\s*(end)\\s*(?=$|//|/\\*)",
+          "endCaptures": {
+            "1": {
+              "name": "keyword.control.embedded.end.stata"
+            }
+          },
+          "contentName": "meta.embedded.block.mata source.mata",
+          "patterns": [
+            {
+              "include": "#comments"
+            },
+            {
+              "include": "#mata"
+            }
+          ]
+        },
+        {
+          "name": "meta.line.mata.stata",
+          "begin": "(?:^|(?<=[:;{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(mata)\\s*(:)(?=\\s*\\S)",
+          "beginCaptures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.control.embedded.mata.stata"
+            },
+            "3": {
+              "name": "punctuation.separator.colon.stata"
+            }
+          },
+          "end": "$",
+          "contentName": "source.mata",
+          "patterns": [
+            {
+              "include": "#mata"
+            }
+          ]
+        },
+        {
+          "name": "meta.block.python.stata",
+          "begin": "(?:^|(?<=[:;{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(python)(?:\\s*(,)\\s*[A-Za-z]+)?\\s*(:)?\\s*(?=$|//|/\\*)",
+          "beginCaptures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.control.embedded.python.stata"
+            },
+            "3": {
+              "name": "punctuation.separator.comma.stata"
+            },
+            "4": {
+              "name": "punctuation.separator.colon.stata"
+            }
+          },
+          "end": "^\\s*(end)\\s*(?=$|//|/\\*)",
+          "endCaptures": {
+            "1": {
+              "name": "keyword.control.embedded.end.stata"
+            }
+          },
+          "contentName": "meta.embedded.block.python",
+          "patterns": [
+            {
+              "include": "source.python"
+            }
+          ]
+        },
+        {
+          "name": "meta.line.python.stata",
+          "begin": "(?:^|(?<=[:;{}]))\\s*((?:(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?|else)\\s+)*)(python)\\s*(:)(?=\\s*\\S)",
+          "beginCaptures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#prefix-words"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.control.embedded.python.stata"
+            },
+            "3": {
+              "name": "punctuation.separator.colon.stata"
+            }
+          },
+          "end": "$",
+          "contentName": "meta.embedded.line.python",
+          "patterns": [
+            {
+              "include": "source.python"
+            }
+          ]
+        }
+      ]
+    },
+    "prefix-words": {
+      "patterns": [
+        {
+          "match": "\\belse\\b",
+          "name": "keyword.control.conditional.stata"
+        },
+        {
+          "match": "\\b(?:qui(?:e(?:t(?:l(?:y)?)?)?)?|n(?:o(?:i(?:s(?:i(?:l(?:y)?)?)?)?)?)?|cap(?:t(?:u(?:r(?:e)?)?)?)?)\\b",
+          "name": "storage.modifier.prefix.stata"
+        }
+      ]
+    },
+    "body": {
+      "patterns": [
+        {
+          "include": "#comments"
+        },
+        {
+          "include": "#strings"
+        },
+        {
+          "include": "#macros"
+        },
+        {
+          "match": "\\b[A-Za-z][A-Za-z0-9+.\\-]*://[^\\s\"',;]+",
+          "name": "markup.underline.link.stata"
+        },
+        {
+          "include": "#keywords-anywhere"
+        },
+        {
+          "include": "#plottypes"
+        },
+        {
+          "include": "#stored-results"
+        },
+        {
+          "include": "#factor-operators"
+        },
+        {
+          "include": "#functions"
+        },
+        {
+          "include": "#constants"
+        },
+        {
+          "include": "#formats"
+        },
+        {
+          "include": "#types"
+        },
+        {
+          "include": "#operators"
+        },
+        {
+          "include": "#punctuation"
         }
       ]
     },
     "strings": {
       "patterns": [
         {
-          "name": "string.quoted.compound.stata",
-          "begin": "`\"",
-          "end": "\"'",
-          "patterns": [
-            { "include": "#macros" }
-          ]
+          "include": "#string-compound"
         },
         {
           "name": "string.quoted.double.stata",
           "begin": "\"",
-          "end": "\"",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.stata"
+            }
+          },
+          "end": "(\")|$",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.stata"
+            }
+          },
           "patterns": [
-            { "name": "constant.character.escape.stata", "match": "\\\\." },
-            { "include": "#macros" }
+            {
+              "match": "\\\\[\\\\$\\x60]",
+              "name": "constant.character.escape.stata"
+            },
+            {
+              "include": "#macros"
+            }
           ]
+        }
+      ]
+    },
+    "string-compound": {
+      "name": "string.quoted.compound.stata",
+      "begin": "`\"",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.begin.stata"
+        }
+      },
+      "end": "\"'",
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.end.stata"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#string-compound"
+        },
+        {
+          "match": "\\\\[\\\\$\\x60]",
+          "name": "constant.character.escape.stata"
+        },
+        {
+          "include": "#macros"
         }
       ]
     },
@@ -57,87 +1735,381 @@
       "patterns": [
         {
           "name": "variable.other.macro.local.stata",
-          "match": "`[a-zA-Z0-9_]+'"
+          "begin": "\\x60(?!\")",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.macro.begin.stata"
+            }
+          },
+          "end": "(')|$",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.macro.end.stata"
+            }
+          },
+          "patterns": [
+            {
+              "match": "\\G(\\+\\+|--)",
+              "captures": {
+                "1": {
+                  "name": "keyword.operator.increment.stata"
+                }
+              }
+            },
+            {
+              "match": "\\G\\s*(:)\\s*([A-Za-z_]\\w*)",
+              "captures": {
+                "1": {
+                  "name": "punctuation.separator.colon.stata"
+                },
+                "2": {
+                  "name": "support.function.macro-extended.stata"
+                }
+              }
+            },
+            {
+              "match": "\\G\\s*(=)",
+              "captures": {
+                "1": {
+                  "name": "keyword.operator.assignment.stata"
+                }
+              }
+            },
+            {
+              "match": "\\G\\w+"
+            },
+            {
+              "match": "(\\+\\+|--)(?=')",
+              "name": "keyword.operator.increment.stata"
+            },
+            {
+              "include": "#macros"
+            },
+            {
+              "include": "#strings"
+            },
+            {
+              "include": "#stored-results"
+            },
+            {
+              "include": "#functions"
+            },
+            {
+              "include": "#constants"
+            },
+            {
+              "include": "#operators"
+            }
+          ]
         },
         {
           "name": "variable.other.macro.global.stata",
-          "match": "\\$([a-zA-Z0-9_]+|\\{[a-zA-Z0-9_]+\\})"
+          "begin": "\\$\\{",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.macro.begin.stata"
+            }
+          },
+          "end": "\\}",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.macro.end.stata"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#macros"
+            }
+          ]
+        },
+        {
+          "name": "variable.other.macro.global.stata",
+          "match": "(\\$)[A-Za-z0-9_]+",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.macro.stata"
+            }
+          }
         }
       ]
     },
-    "keywords": {
+    "keywords-anywhere": {
       "patterns": [
         {
-          "name": "keyword.control.stata",
-          "match": "\\b(if|else|foreach|forvalues|forval|while|in|of)\\b"
+          "match": "\\b(if|else)\\b",
+          "name": "keyword.control.conditional.stata"
         },
         {
-          "name": "keyword.declaration.program.stata",
-          "match": "\\b(program|end|syntax|args)\\b"
+          "match": "\\b(in|using)\\b",
+          "name": "keyword.other.qualifier.stata"
         },
         {
-          "name": "storage.modifier.stata",
-          "match": "\\b(quietly|qui|noisily|noi|capture|cap|preserve|restore)\\b"
+          "match": "\\b(as)\\s+(text|txt|result|res|error|err|input|inp)\\b",
+          "captures": {
+            "1": {
+              "name": "keyword.other.display.stata"
+            },
+            "2": {
+              "name": "support.constant.display.stata"
+            }
+          }
         },
         {
-          "name": "keyword.other.stata",
-          "match": "\\b(use|sysuse|webuse|save|clear|describe|des|summarize|sum|summarise|tabulate|tab|tab1|tab2|list|browse|br|edit|ed|generate|gen|replace|egen|drop|keep|sort|gsort|by|bysort|bys|merge|append|collapse|reshape|rename|order|format|label|count|recode|duplicates|tostring|destring)\\b"
+          "match": "\\b(_col(?:umn)?|_skip|_dup|_newline|_char|_continue|_request)(?=\\()",
+          "name": "support.function.display.stata"
+        }
+      ]
+    },
+    "plottypes": {
+      "patterns": [
+        {
+          "match": "(?:(?<=\\()|(?<=\\|\\|))\\s*((?:contourline|rconnected|connected|pcscatter|histogram|scatteri|dropline|rscatter|pccapsym|pcbarrow|pcarrowi|function|kdensity|scatter|rcapsym|pcspike|pcarrow|tsrline|contour|mspline|fpfitci|lpolyci|rspike|tsline|lowess|lfitci|qfitci|spike|rarea|rline|mband|fpfit|lpoly|line|area|rbar|rcap|lfit|qfit|bar|dot|pci))(?=\\s+[A-Za-z_\\x60$(])",
+          "captures": {
+            "1": {
+              "name": "support.function.plottype.stata"
+            }
+          }
+        }
+      ]
+    },
+    "stored-results": {
+      "patterns": [
+        {
+          "name": "variable.language.stored-result.stata",
+          "match": "\\b([cers])(\\()\\s*([A-Za-z_][\\w]*)\\s*(\\))",
+          "captures": {
+            "1": {
+              "name": "support.variable.stored-result.stata"
+            },
+            "2": {
+              "name": "punctuation.section.parens.begin.stata"
+            },
+            "4": {
+              "name": "punctuation.section.parens.end.stata"
+            }
+          }
         },
         {
-          "name": "keyword.other.estimation.stata",
-          "match": "\\b(regress|reg|logit|probit|ivregress|ivreg2|reghdfe|xtreg|xtset|areg|qreg|poisson|nbreg|tobit|margins|marginsplot|predict|test|testparm|lincom|nlcom|estimates|ereturn|return)\\b"
+          "name": "meta.coefficient.stata",
+          "begin": "\\b(_b|_se|_coef)\\s*(\\[)",
+          "beginCaptures": {
+            "1": {
+              "name": "variable.language.coefficient.stata"
+            },
+            "2": {
+              "name": "punctuation.section.brackets.begin.stata"
+            }
+          },
+          "end": "\\]",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.section.brackets.end.stata"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#macros"
+            },
+            {
+              "include": "#factor-operators"
+            },
+            {
+              "include": "#constants"
+            },
+            {
+              "include": "#operators"
+            }
+          ]
+        }
+      ]
+    },
+    "factor-operators": {
+      "patterns": [
+        {
+          "match": "\\b((?:(?:ibn|ib|io|i|c|o|b|[LFDSlfds])(?:\\d+|\\([^()]*\\)|n)?)+)(\\.)(?=[A-Za-z_(\\x60$])",
+          "captures": {
+            "1": {
+              "name": "keyword.operator.factor-variable.stata"
+            },
+            "2": {
+              "name": "keyword.operator.factor-variable.stata"
+            }
+          }
         },
         {
-          "name": "keyword.other.graphics.stata",
-          "match": "\\b(graph|twoway|scatter|line|histogram|hist|kdensity|bar|box|pie|qnorm|pnorm|matrix|ac|pac|xcorr|binscatter)\\b"
-        },
+          "match": "##?",
+          "name": "keyword.operator.interaction.stata"
+        }
+      ]
+    },
+    "functions": {
+      "patterns": [
         {
-          "name": "storage.type.stata",
-          "match": "\\b(byte|int|long|float|double|str[0-9]+|strL)\\b"
-        },
-        {
-          "name": "keyword.other.temporary.stata",
-          "match": "\\b(tempvar|tempname|tempfile|scalar)\\b"
-        },
-        {
-          "name": "keyword.other.execution.stata",
-          "match": "\\b(do|run|include)\\b"
+          "match": "\\b(abs|ceil|cloglog|comb|digamma|exp|expm1|floor|int|invcloglog|invlogit|ln|ln1m|ln1p|lnfactorial|lngamma|log|log10|log1m|log1p|logit|max|min|mod|reldif|round|sign|sqrt|sum|trigamma|trunc|sin|cos|tan|asin|acos|atan|atan2|sinh|cosh|tanh|asinh|acosh|atanh|cond|inlist|inrange|missing|mi|autocode|chop|clip|float|fileexists|fileread|filereadable|filewrite|irecode|recode|byteorder|_caller|has_eprop|smallestdouble|epsdouble|epsfloat|maxbyte|maxint|maxlong|maxfloat|maxdouble|minbyte|minint|minlong|minfloat|mindouble|abbrev|char|collatorlocale|collatorversion|indexnot|plural|real|regexm|regexr|regexs|regexmatch|regexreplace|regexreplaceall|regexcapture|regexcapturenamed|ustrregexm|ustrregexrf|ustrregexra|ustrregexs|soundex|soundex_nara|strcat|strdup|string|strofreal|stritrim|strlen|strlower|strltrim|strmatch|strpos|strproper|strreverse|strrpos|strrtrim|strtoname|strtrim|strupper|subinstr|subinword|substr|tobytes|uchar|udstrlen|udsubstr|uisdigit|uisletter|ustrcompare|ustrcompareex|ustrfix|ustrfrom|ustrinvalidcnt|ustrleft|ustrlen|ustrlower|ustrltrim|ustrnormalize|ustrpos|ustrright|ustrrpos|ustrrtrim|ustrsortkey|ustrsortkeyex|ustrtitle|ustrto|ustrtohex|ustrtoname|ustrtrim|ustrunescape|ustrupper|ustrword|ustrwordcount|usubinstr|usubstr|word|wordbreaklocale|wordcount|lower|upper|proper|trim|ltrim|rtrim|itrim|length|index|bofd|Cdhms|Chms|Clock|clock|Cmdyhms|Cofc|cofC|Cofd|cofd|daily|date|day|dhms|dmy|doh|dow|doy|dofb|dofC|dofc|dofh|dofm|dofq|dofw|dofy|halfyear|halfyearly|hh|hhC|hms|hofd|hours|mdy|mdyhms|minutes|mm|mmC|mofd|month|monthly|msofhours|msofminutes|msofseconds|qofd|quarter|quarterly|seconds|ss|ssC|tC|tc|td|th|tm|tq|tw|tb|week|weekly|wofd|year|yearly|yh|ym|yofd|yq|yw|datediff|datediff_frac|age|age_frac|birthday|daysinmonth|firstdayofmonth|isleapyear|lastdayofmonth|nextbirthday|previousbirthday|nextleapyear|previousleapyear|today|now|clockdiff|clockdiff_frac|clockpart|datepart|betaden|binomial|binomialp|binomialtail|binormal|chi2|chi2den|chi2tail|exponential|exponentialden|exponentialtail|F|Fden|Ftail|gammaden|gammap|gammaptail|hypergeometric|hypergeometricp|ibeta|ibetatail|invbinomial|invbinomialtail|invchi2|invchi2tail|invF|invFtail|invgammap|invgammaptail|invibeta|invibetatail|invnchi2|invnormal|invpoisson|invpoissontail|invt|invttail|invexponential|lnnormal|lnnormalden|nbinomial|nbinomialp|nbinomialtail|nchi2|nchi2den|nchi2tail|normal|normalden|npnchi2|poissonp|poissontail|t|tden|ttail|nt|ntden|nttail|logistic|logisticden|logistictail|weibull|weibullden|weibulltail|runiform|runiformint|rnormal|rbeta|rbinomial|rchi2|rexponential|rgamma|rhypergeometric|rlogistic|rnbinomial|rpoisson|rt|rweibull|rweibullph|rcauchy|rigaussian|rlaplace|uniform|lnigammaden|igaussian|colnumb|colsof|det|diag0cnt|el|issymmetric|matmissing|mreldif|rownumb|rowsof|trace|cholesky|corr|diag|get|hadamard|I|inv|invsym|J|matuniform|nullmat|sweep|vec|vecdiag|scalar|matrix)(?=\\()",
+          "name": "support.function.builtin.stata"
         }
       ]
     },
     "constants": {
       "patterns": [
         {
-          "name": "constant.numeric.stata",
-          "match": "\\b[0-9]+(\\.[0-9]+)?\\b"
+          "match": "\\b(_n|_N|_pi|_rc|_cons|_all|_pred|_skip|_dta)\\b",
+          "name": "constant.language.stata"
         },
         {
-          "name": "constant.language.missing.stata",
-          "match": "(?<=\\s|^)\\.([a-z])?(?=\\s|$|[;,])"
+          "match": "(?<![\\w.])(?:\\d+\\.?\\d*|\\.\\d+)(?:[eE][+-]?\\d+)?(?![\\w.])",
+          "name": "constant.numeric.stata"
         },
         {
-          "name": "constant.language.boolean.stata",
-          "match": "\\b(true|false|TRUE|FALSE)\\b"
+          "match": "(?<![\\w.)\\]'}])\\.[a-z]?(?![\\w.])",
+          "name": "constant.language.missing.stata"
+        }
+      ]
+    },
+    "formats": {
+      "patterns": [
+        {
+          "match": "(?<![\\w%])%-?~?(?:t[cCdwmqhybg][A-Za-z0-9_:!\\-/]*|\\d+(?:[.,]\\d+)?[fgexs]c?|[.,]\\d+[fge]c?|[fgs]c?)(?![\\w])",
+          "name": "constant.other.format.stata"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "match": "\\b(?:byte|int|long|float|double|strL|str[1-9][0-9]{0,3})\\b(?!\\s*\\()",
+          "name": "storage.type.stata"
         }
       ]
     },
     "operators": {
       "patterns": [
         {
-          "name": "keyword.operator.comparison.stata",
-          "match": "(==|!=|~=|<=|>=|<|>)"
+          "match": "==|!=|~=|>=|<=|<|>",
+          "name": "keyword.operator.comparison.stata"
         },
         {
-          "name": "keyword.operator.logical.stata",
-          "match": "(&|\\||!)"
+          "match": "\\|\\|",
+          "name": "keyword.operator.graph-separator.stata"
         },
         {
-          "name": "keyword.operator.arithmetic.stata",
-          "match": "(\\+|\\-|\\*|\\/|\\^)"
+          "match": "&|\\||!|~",
+          "name": "keyword.operator.logical.stata"
         },
         {
-          "name": "keyword.operator.assignment.stata",
-          "match": "="
+          "match": "\\+|-|\\*|/|\\^|\\\\",
+          "name": "keyword.operator.arithmetic.stata"
+        },
+        {
+          "match": "=",
+          "name": "keyword.operator.assignment.stata"
+        }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "match": "\\{",
+          "name": "punctuation.section.block.begin.stata"
+        },
+        {
+          "match": "\\}",
+          "name": "punctuation.section.block.end.stata"
+        },
+        {
+          "match": ",",
+          "name": "punctuation.separator.comma.stata"
+        },
+        {
+          "match": ":",
+          "name": "punctuation.separator.colon.stata"
+        }
+      ]
+    },
+    "mata": {
+      "patterns": [
+        {
+          "include": "#mata-comments"
+        },
+        {
+          "include": "#strings"
+        },
+        {
+          "include": "#macros"
+        },
+        {
+          "match": "\\b(real|string|numeric|complex|pointer|transmorphic|void|struct|class)\\s+(?:(scalar|vector|rowvector|colvector|matrix|function)\\s+)?([A-Za-z_]\\w*)(?=\\s*\\()",
+          "captures": {
+            "1": {
+              "name": "storage.type.mata"
+            },
+            "2": {
+              "name": "storage.type.mata"
+            },
+            "3": {
+              "name": "entity.name.function.mata"
+            }
+          }
+        },
+        {
+          "match": "\\b(if|else|for|while|do|break|continue|return|goto)\\b",
+          "name": "keyword.control.mata"
+        },
+        {
+          "match": "\\b(real|string|numeric|complex|pointer|transmorphic|void|scalar|matrix|vector|colvector|rowvector|struct|class|function)\\b",
+          "name": "storage.type.mata"
+        },
+        {
+          "match": "\\b(external|local|version|public|private|protected|static|virtual|final|extends|this|super|NULL)\\b",
+          "name": "storage.modifier.mata"
+        },
+        {
+          "match": "\\bmata\\b",
+          "name": "keyword.control.embedded.mata.stata"
+        },
+        {
+          "match": "\\b(st_\\w+|J|I|rows|cols|length|sum|colsum|rowsum|mean|variance|quadcross|cross|invsym|cholinv|lusolve|qrsolve|svd|symeigensystem|sort|uniqrows|select|selectindex|strlen|substr|strtrim|strlower|strupper|printf|sprintf|display|errprintf|exit|_error|editmissing|runiform|rnormal|max|min|abs|sqrt|exp|ln|log|round|floor|ceil|asarray\\w*|tokens|invtokens|strofreal|strtoreal|fopen|fclose|fget|fput|fwrite|fread|cat|findfile|pathjoin|missing|hasmissing|nonmissing|colmax|colmin|rowmax|rowmin|range|rangen|diag|diagonal|det|trace|rank|luinv|pinv|optimize\\w*|moptimize\\w*|isreal|isstring|eltype|orgtype|any|all|anyof|allof|colshape|rowshape|vec|lowertriangle|uppertriangle|makesymmetric|order|jumble|panelsetup|panelsubmatrix|stata|stataoc)(?=\\s*\\()",
+          "name": "support.function.mata"
+        },
+        {
+          "match": "\\b[A-Za-z_]\\w*(?=\\s*\\()",
+          "name": "entity.name.function.call.mata"
+        },
+        {
+          "match": "(?<![\\w.])(?:\\d+\\.?\\d*|\\.\\d+)(?:[eE][+-]?\\d+)?(?![\\w.])",
+          "name": "constant.numeric.mata"
+        },
+        {
+          "match": "(?<![\\w.)\\]'])\\.[a-z]?(?![\\w.])",
+          "name": "constant.language.missing.mata"
+        },
+        {
+          "match": ":(?:==|!=|>=|<=|[+\\-*/^<>&|])|::|\\.\\.|->|==|!=|>=|<=|&&|\\|\\||\\+\\+|--|[+\\-*/^<>&|!=#']",
+          "name": "keyword.operator.mata"
+        },
+        {
+          "match": "[{}]",
+          "name": "punctuation.section.block.mata"
+        },
+        {
+          "match": ";",
+          "name": "punctuation.terminator.statement.mata"
+        }
+      ]
+    },
+    "mata-comments": {
+      "patterns": [
+        {
+          "include": "#comment-block"
+        },
+        {
+          "name": "comment.line.double-slash.mata",
+          "match": "(//).*$",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.comment.mata"
+            }
+          }
         }
       ]
     }

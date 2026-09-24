@@ -8,19 +8,46 @@ import { getPythonExecutable } from './runtimeManager';
 
 /**
  * Converts a .dta file to parquet using Python (pandas or pyreadstat).
+ * Reads in chunks so multi-GB files don't have to fit in memory at once.
  */
 function convertDtaToParquet(filePath: string, cachedParquetPath: string): Promise<void> {
     const pythonBin = getPythonExecutable();
     const pythonScript = `
+import os
 import sys
 
 src = sys.argv[1]
 dst = sys.argv[2]
 
-try:
+def convert_chunked():
     import pandas as pd
-    df = pd.read_stata(src)
-    df.to_parquet(dst, index=False)
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    writer = None
+    try:
+        with pd.read_stata(src, chunksize=200_000) as reader:
+            for chunk in reader:
+                table = pa.Table.from_pandas(chunk, preserve_index=False)
+                if writer is None:
+                    writer = pq.ParquetWriter(dst, table.schema)
+                else:
+                    # A chunk whose column is all-missing infers a different type.
+                    table = table.cast(writer.schema)
+                writer.write_table(table)
+    finally:
+        if writer is not None:
+            writer.close()
+    if writer is None:
+        pd.read_stata(src).to_parquet(dst, index=False)
+
+try:
+    try:
+        convert_chunked()
+    except Exception:
+        if os.path.exists(dst):
+            os.remove(dst)
+        import pandas as pd
+        pd.read_stata(src).to_parquet(dst, index=False)
 except Exception as e_pandas:
     try:
         import pyreadstat

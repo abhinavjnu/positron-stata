@@ -2,7 +2,7 @@
   "name": "positron-stata",
   "displayName": "Stata Support for Positron",
   "description": "First-class Stata support for Positron IDE with native Variables, Data Explorer, Plots, and .dta support.",
-  "version": "0.1.6",
+  "version": "0.2.0",
   "publisher": "abhinavjnu",
   "license": "MIT",
   "icon": "icon.png",
@@ -58,7 +58,11 @@
       {
         "language": "stata",
         "scopeName": "source.stata",
-        "path": "./syntaxes/stata.tmLanguage.json"
+        "path": "./syntaxes/stata.tmLanguage.json",
+        "embeddedLanguages": {
+          "meta.embedded.block.python": "python",
+          "meta.embedded.line.python": "python"
+        }
       }
     ],
     "languageRuntimes": [
@@ -72,7 +76,7 @@
         "positron-stata.stataHome": {
           "type": "string",
           "default": "",
-          "description": "Path to the Stata installation directory (e.g. /usr/local/stata19, /Applications/StataNow 19, or C:\\Program Files\\Stata19). If blank, automatically discovered."
+          "description": "Path to your Stata installation: the install folder (e.g. /usr/local/stata19, /Applications/StataNow, C:\\\\Program Files\\\\Stata19), a macOS .app bundle, or the Stata executable. If blank, Stata is found automatically."
         },
         "positron-stata.stataEdition": {
           "type": "string",
@@ -94,7 +98,22 @@
         "positron-stata.pythonPath": {
           "type": "string",
           "default": "",
-          "description": "Path to the Python interpreter with PyStata installed. If blank, automatically detected from PATH or virtual environments."
+          "description": "Python interpreter that hosts the Stata kernel (Python 3.9–3.13, 64-bit, with numpy and pandas). Leave blank to pick one automatically or use \"Stata: Set Up Python Environment\"."
+        },
+        "positron-stata.codeLens.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show 'Run Cell' / 'Run Section' CodeLens above `* %%` cell markers and `**#` section headings in do-files."
+        },
+        "positron-stata.dataExplorer.showValueLabels": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show value labels instead of codes in the Data Explorer (like Stata's browse)."
+        },
+        "positron-stata.jupyterKernelspec.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Keep a `positron-stata` Jupyter kernelspec up to date so Quarto documents (`jupyter: positron-stata`) and Jupyter tools can run Stata."
         }
       }
     },
@@ -133,6 +152,72 @@
         "command": "stata.openDtaInDataExplorer",
         "title": "Open in Data Explorer",
         "category": "Stata"
+      },
+      {
+        "command": "stata.runCurrentCell",
+        "title": "Run Current Cell",
+        "category": "Stata",
+        "icon": "$(play)"
+      },
+      {
+        "command": "stata.runCurrentCellAndAdvance",
+        "title": "Run Current Cell and Advance",
+        "category": "Stata"
+      },
+      {
+        "command": "stata.runCellsAbove",
+        "title": "Run Cells Above",
+        "category": "Stata"
+      },
+      {
+        "command": "stata.runNextCell",
+        "title": "Run Next Cell",
+        "category": "Stata"
+      },
+      {
+        "command": "stata.runSection",
+        "title": "Run Current Section",
+        "category": "Stata"
+      },
+      {
+        "command": "stata.runToCursor",
+        "title": "Run From Top to Cursor",
+        "category": "Stata"
+      },
+      {
+        "command": "stata.runFromCursor",
+        "title": "Run From Cursor to End",
+        "category": "Stata"
+      },
+      {
+        "command": "stata.setupEnvironment",
+        "title": "Set Up Python Environment",
+        "category": "Stata"
+      },
+      {
+        "command": "stata.diagnose",
+        "title": "Diagnose Setup",
+        "category": "Stata"
+      },
+      {
+        "command": "stata.chooseInterpreter",
+        "title": "Choose Python Interpreter…",
+        "category": "Stata"
+      },
+      {
+        "command": "stata.openSampleDoFile",
+        "title": "Open Sample Do-File",
+        "category": "Stata"
+      },
+      {
+        "command": "stata.openWalkthrough",
+        "title": "Get Started with Stata in Positron",
+        "category": "Stata"
+      },
+      {
+        "command": "stata.connect",
+        "title": "Connect Your Stata",
+        "category": "Stata"
       }
     ],
     "keybindings": [
@@ -140,6 +225,23 @@
         "command": "stata.doFile",
         "key": "ctrl+shift+d",
         "mac": "cmd+shift+d",
+        "when": "editorTextFocus && editorLangId == 'stata'"
+      },
+      {
+        "command": "stata.runCurrentCell",
+        "key": "ctrl+shift+enter",
+        "mac": "cmd+shift+enter",
+        "when": "editorTextFocus && editorLangId == 'stata'"
+      },
+      {
+        "command": "stata.runCurrentCellAndAdvance",
+        "key": "shift+enter",
+        "when": "editorTextFocus && editorLangId == 'stata' && stata.hasCodeCells && !suggestWidgetVisible && !inlineSuggestionVisible"
+      },
+      {
+        "command": "stata.runSection",
+        "key": "ctrl+alt+s",
+        "mac": "ctrl+alt+s",
         "when": "editorTextFocus && editorLangId == 'stata'"
       }
     ],
@@ -149,6 +251,40 @@
           "command": "stata.openDtaInDataExplorer",
           "group": "navigation",
           "when": "resourceExtname == .dta || resourceExtname == .DTA"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "stata.runCurrentCell",
+          "when": "editorLangId == 'stata'"
+        },
+        {
+          "command": "stata.runCurrentCellAndAdvance",
+          "when": "editorLangId == 'stata' && stata.hasCodeCells"
+        },
+        {
+          "command": "stata.runCellsAbove",
+          "when": "editorLangId == 'stata' && stata.hasCodeCells"
+        },
+        {
+          "command": "stata.runNextCell",
+          "when": "editorLangId == 'stata' && stata.hasCodeCells"
+        },
+        {
+          "command": "stata.runSection",
+          "when": "editorLangId == 'stata' && stata.hasSections"
+        },
+        {
+          "command": "stata.runToCursor",
+          "when": "editorLangId == 'stata'"
+        },
+        {
+          "command": "stata.runFromCursor",
+          "when": "editorLangId == 'stata'"
+        },
+        {
+          "command": "stata.connect",
+          "when": "false"
         }
       ],
       "editor/context": [
@@ -165,6 +301,26 @@
         {
           "command": "stata.openDataExplorer",
           "group": "1_stata@3",
+          "when": "editorLangId == 'stata'"
+        },
+        {
+          "command": "stata.runCurrentCell",
+          "group": "2_stata_run@1",
+          "when": "editorLangId == 'stata' && stata.hasCodeCells"
+        },
+        {
+          "command": "stata.runSection",
+          "group": "2_stata_run@2",
+          "when": "editorLangId == 'stata' && stata.hasSections"
+        },
+        {
+          "command": "stata.runToCursor",
+          "group": "2_stata_run@3",
+          "when": "editorLangId == 'stata'"
+        },
+        {
+          "command": "stata.runFromCursor",
+          "group": "2_stata_run@4",
           "when": "editorLangId == 'stata'"
         }
       ],
@@ -184,13 +340,80 @@
           "when": "resourceLangId == 'stata' && !isInDiffEditor"
         }
       ]
-    }
+    },
+    "walkthroughs": [
+      {
+        "id": "stata.gettingStarted",
+        "title": "Get Started with Stata in Positron",
+        "description": "Use your own licensed Stata from Positron: run do-files, explore data, and view graphs.",
+        "when": "true",
+        "steps": [
+          {
+            "id": "connect",
+            "title": "Connect your Stata",
+            "description": "Positron finds your Stata installation and sets up the small Python helper it needs.\n[Connect Stata](command:stata.connect)\nSomething not working? [Diagnose Setup](command:stata.diagnose)",
+            "media": {
+              "markdown": "walkthrough/connect.md"
+            },
+            "completionEvents": [
+              "onCommand:stata.connect",
+              "onCommand:stata.setupEnvironment",
+              "onCommand:stata.diagnose"
+            ]
+          },
+          {
+            "id": "openDoFile",
+            "title": "Open a do-file",
+            "description": "Open a sample do-file that uses sysuse auto, cells and sections.\n[Open Sample Do-File](command:stata.openSampleDoFile)",
+            "media": {
+              "markdown": "walkthrough/dofile.md"
+            },
+            "completionEvents": [
+              "onCommand:stata.openSampleDoFile",
+              "onLanguage:stata"
+            ]
+          },
+          {
+            "id": "runCode",
+            "title": "Run code",
+            "description": "Ctrl+Enter (Cmd+Enter) runs the current statement, Ctrl+Shift+D (Cmd+Shift+D) runs the file, and Run Cell / Run Section links run blocks.",
+            "media": {
+              "markdown": "walkthrough/run.md"
+            },
+            "completionEvents": [
+              "onCommand:stata.doFile",
+              "onCommand:stata.runCurrentCell",
+              "onCommand:stata.runSection"
+            ]
+          },
+          {
+            "id": "explore",
+            "title": "Explore data, results and graphs",
+            "description": "The Variables pane, Data Explorer, Plots pane and Help pane (F1) replace Stata's windows.\n[Open Data Explorer](command:stata.openDataExplorer)",
+            "media": {
+              "markdown": "walkthrough/explore.md"
+            },
+            "completionEvents": [
+              "onCommand:stata.openDataExplorer"
+            ]
+          },
+          {
+            "id": "cheatSheet",
+            "title": "Stata ↔ Positron cheat sheet",
+            "description": "Where to find the Results window, Review, Data Editor, Viewer and more.",
+            "media": {
+              "markdown": "walkthrough/cheatsheet.md"
+            }
+          }
+        ]
+      }
+    ]
   },
   "scripts": {
     "build": "node esbuild.js",
     "watch": "node esbuild.js --watch",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "npm run typecheck && esbuild tests/discovery.test.ts --bundle --platform=node --format=cjs --log-level=warning --outfile=out/tests/discovery.test.js && node --test out/tests/discovery.test.js"
+    "test": "npm run typecheck && esbuild \"tests/*.test.ts\" --bundle --platform=node --format=cjs --log-level=warning --outdir=out/tests && node --test \"out/tests/*.test.js\""
   },
   "devDependencies": {
     "@posit-dev/positron": "^0.2.10",

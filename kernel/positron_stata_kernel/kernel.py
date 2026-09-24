@@ -5,7 +5,10 @@ Handles execution, streaming output, plots, Variables pane comms, UI/Help comms,
 
 import os
 import re
+import signal
+import socket
 import sys
+import threading
 from typing import Optional
 
 from . import _positron_loader
@@ -27,7 +30,7 @@ from .help_handler import StataHelpHandler
 
 class PositronStataKernel(Kernel):
     implementation = "positron_stata"
-    implementation_version = "0.1.6"
+    implementation_version = "0.2.0"
     language = "stata"
     language_version = os.environ.get("STATA_VERSION", "19")
     language_info = {
@@ -79,8 +82,48 @@ class PositronStataKernel(Kernel):
         self.comm_manager.register_target("positron.help", self.help_handler.on_comm_open)
         self.comm_manager.register_target("positron.plot", lambda comm, msg: None)
 
+        self._sigint_watcher = _SigintWatcher(self.engine.request_break) if os.name != "nt" else None
+
+    # ----- Interrupts -----
+    #
+    # While Stata runs, the main thread is inside C (StataSO_Execute), so Python-level SIGINT
+    # handlers cannot run until Stata finishes. Both interrupt modes therefore end in
+    # StataEngine.request_break (StataSO_SetBreak) called from another thread, which stops
+    # Stata like its Break key: the run fails with "--Break--\nr(1);" and the session stays
+    # usable.
+
+    def _send_interrupt_children(self):
+        # interrupt_mode "message" (all platforms): ipykernel's control thread calls this for
+        # an interrupt_request. The default sends SIGINT to the process group, which would
+        # raise KeyboardInterrupt at an arbitrary point once Stata returns (and is not
+        # supported on Windows), so break Stata directly instead. Outside user code there is
+        # nothing long-running to stop.
+        self.engine.request_break()
+
+    def pre_handler_hook(self):
+        # interrupt_mode "signal" (POSIX): ipykernel installs default_int_handler around every
+        # shell handler. Replace it with a handler that never raises (a KeyboardInterrupt
+        # escaping do_execute would leave the request without a reply) and route the C-level
+        # signal through a wakeup fd to a watcher thread that breaks Stata immediately.
+        super().pre_handler_hook()
+        try:
+            signal.signal(signal.SIGINT, self._on_sigint)
+        except (ValueError, OSError):
+            return
+        if self._sigint_watcher is not None:
+            self._sigint_watcher.arm()
+
+    def post_handler_hook(self):
+        if self._sigint_watcher is not None:
+            self._sigint_watcher.disarm()
+        super().post_handler_hook()
+
+    def _on_sigint(self, signum, frame):
+        # Runs once the main thread is back in Python; the watcher usually got there first.
+        self.engine.request_break()
+
     async def do_is_complete(self, code: str):
-        return completeness.check(code)
+        return completeness.check(code, semicolon_delimiter=self.engine.semicolon_delimiter)
 
     def do_complete(self, code: str, cursor_pos: int):
         return complete_stata(code, cursor_pos, self.engine.get_variable_names)
@@ -88,15 +131,18 @@ class PositronStataKernel(Kernel):
     def do_execute(self, code, silent, store_history=True, user_expressions=None, allow_stdin=False):
         code_trimmed = code.strip()
         if not code_trimmed:
-            return self._ok_reply()
+            return self._ok_reply(user_expressions)
 
-        help_m = re.match(r"^(?:help|h)(?:\s+([a-zA-Z0-9_\.]+))?\s*$", code_trimmed, re.IGNORECASE)
+        help_code = code_trimmed
+        if self.engine.semicolon_delimiter:
+            help_code = help_code.rstrip("; \t")
+        help_m = re.match(r"^(?:help|h)(?:\s+([a-zA-Z0-9_\.]+))?\s*$", help_code, re.IGNORECASE)
         if help_m and self.help_handler._comm is not None:
             topic = help_m.group(1) or "help"
             self.help_handler.show_help(topic)
             if not silent:
                 self._send_stdout(f"Displaying Stata help for '{topic}' in the Help pane.\n")
-            return self._ok_reply()
+            return self._ok_reply(user_expressions)
 
         stdout_cb = (lambda text: self._send_stdout(text)) if not silent else None
         stderr_cb = (lambda text: self._send_stderr(text)) if not silent else None
@@ -119,27 +165,47 @@ class PositronStataKernel(Kernel):
                     }
                 )
 
-        # If dataset changed, refresh Variables pane
-        if res.dataset_changed:
+        # If the dataset, e()/r() results or frames changed, refresh Variables pane
+        if res.dataset_changed or getattr(res, "results_changed", False):
             self.variables_handler.send_refresh_event()
 
         # If user ran `browse` or `view`, open Data Explorer tab immediately
         if res.request_open_data_explorer:
-            self.open_data_explorer_for_current_dataset()
+            self.open_data_explorer_for_current_dataset(getattr(res, "browse_request", None))
 
         self.ui_handler.poll_working_directory()
 
         if res.error:
+            # Per ipykernel, user_expressions are only evaluated after successful execution.
             return self._error_reply(res.error, silent)
-        return self._ok_reply()
+        return self._ok_reply(user_expressions)
 
-    def _ok_reply(self):
+    def _ok_reply(self, user_expressions=None):
         return {
             "status": "ok",
             "execution_count": self.execution_count,
             "payload": [],
-            "user_expressions": {},
+            "user_expressions": self._evaluate_user_expressions(user_expressions),
         }
+
+    def _evaluate_user_expressions(self, user_expressions) -> dict:
+        """Evaluate Jupyter `user_expressions` (used by Quarto inline code) with `display`."""
+        results = {}
+        for key, expression in (user_expressions or {}).items():
+            try:
+                ok, text = self.engine.evaluate_expression(str(expression))
+            except Exception as e:
+                ok, text = False, str(e)
+            if ok:
+                results[key] = {"status": "ok", "data": {"text/plain": text}, "metadata": {}}
+            else:
+                results[key] = {
+                    "status": "error",
+                    "ename": "StataError",
+                    "evalue": text,
+                    "traceback": [text],
+                }
+        return results
 
     def _error_reply(self, message: str, silent: bool):
         # An empty ename makes Positron show Stata's message verbatim ("name: message" otherwise).
@@ -148,23 +214,30 @@ class PositronStataKernel(Kernel):
             self.send_response(self.iopub_socket, "error", content)
         return {"status": "error", "execution_count": self.execution_count, **content}
 
-    def open_data_explorer_for_current_dataset(self) -> Optional[str]:
-        """Convert in-memory Stata data to DataFrame and register with Positron Data Explorer."""
-        df = self.engine.get_dataframe()
-        if df is None or df.empty:
+    def open_data_explorer_for_current_dataset(self, request=None) -> Optional[str]:
+        """Convert in-memory Stata data to DataFrame and register with Positron Data Explorer.
+
+        `request` (a BrowseRequest from `browse varlist if in`) limits what is shown."""
+        df = self.engine.get_dataframe(request) if request is not None else self.engine.get_dataframe()
+        subset = request is not None and (bool(request.variables) or request.obs is not None)
+        if df is None or len(df.columns) == 0 or (df.empty and not subset):
             self._send_stderr("No data in memory to browse.\n")
             return None
 
         info = self.engine.get_current_dataset_info()
         title = info.get("name", "Current Dataset")
+        if subset:
+            return self.register_data_explorer_table(df, f"{title} (subset)", None)
+        return self.register_data_explorer_table(df, title, ["current_dataset"])
 
+    def register_data_explorer_table(self, df, title: str, variable_path) -> Optional[str]:
+        """Open a pandas DataFrame in Positron's Data Explorer; return the comm id."""
         try:
-            comm_id = self.data_explorer_service.register_table(
+            return self.data_explorer_service.register_table(
                 df,
                 title=title,
-                variable_path=["current_dataset"]
+                variable_path=variable_path,
             )
-            return comm_id
         except Exception as e:
             self._send_stderr(f"Failed to open Data Explorer: {e}\n")
             return None
@@ -182,3 +255,60 @@ class PositronStataKernel(Kernel):
             "stream",
             {"name": "stderr", "text": text}
         )
+
+
+class _SigintWatcher:
+    """Calls `on_sigint` from a background thread as soon as SIGINT arrives.
+
+    The C-level signal handler writes the signal number to the fd registered with
+    signal.set_wakeup_fd even while the main thread is blocked in C. `arm()` registers our
+    socket (main thread only) and `disarm()` restores the previous wakeup fd; bytes for other
+    signals, or any SIGINT while a previous fd was registered (e.g. by an asyncio loop that
+    uses add_signal_handler), are forwarded to it so its owner keeps working.
+    """
+
+    def __init__(self, on_sigint):
+        self._on_sigint = on_sigint
+        self._reader, self._writer = socket.socketpair()
+        self._writer.setblocking(False)
+        self._previous_fd = -1
+        self._armed = False
+        self._thread = threading.Thread(target=self._run, name="positron-stata-sigint", daemon=True)
+        self._thread.start()
+
+    def arm(self):
+        try:
+            self._previous_fd = signal.set_wakeup_fd(self._writer.fileno(), warn_on_full_buffer=False)
+            self._armed = True
+        except (ValueError, OSError):
+            self._armed = False
+
+    def disarm(self):
+        if not self._armed:
+            return
+        self._armed = False
+        try:
+            signal.set_wakeup_fd(self._previous_fd)
+        except (ValueError, OSError):
+            pass
+        self._previous_fd = -1
+
+    def _run(self):
+        while True:
+            try:
+                data = self._reader.recv(64)
+            except OSError:
+                return
+            if not data:
+                return
+            if signal.SIGINT in data:
+                try:
+                    self._on_sigint()
+                except Exception:
+                    pass
+            previous = self._previous_fd
+            if previous not in (-1, None):
+                try:
+                    os.write(previous, data)
+                except OSError:
+                    pass

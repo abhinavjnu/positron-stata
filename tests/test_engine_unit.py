@@ -25,6 +25,7 @@ class FakeStata:
 
     def __init__(self, macro):
         self.commands = []
+        self.kwargs = []
         self.macro = macro
         self.graphs = {}  # name -> SVG, in draw order; the last one is the current graph
         self.rc = 0
@@ -33,8 +34,32 @@ class FakeStata:
         self.graphs.pop(name, None)
         self.graphs[name] = "<svg>" + body + "x" * 600 + "</svg>"
 
-    def run(self, code, **_kwargs):
+    def run(self, code, **kwargs):
         self.commands.append(code)
+        self.kwargs.append(kwargs)
+        if re.search(r"(?m)^\s*(?:#delimit ;\n)?(?:browse|br|edit)\b", code):
+            # The kernel's browse.ado shim records the request in a global.
+            self.macro.values["positron_stata_browse"] = "1"
+        if code.startswith("#"):
+            if "\n" not in code:
+                # PyStata runs single lines directly, where `#` is not a command (verified live).
+                raise SystemError("# is not a valid command name\nr(199);")
+            # Multi-line code goes through a temp do-file; model the transcript real Stata prints.
+            first, rest = code.split("\n", 1)
+            echo = kwargs.get("echo", True)
+            head = ("\n. " + first if echo else "") + "\ndelimiter now ;\n"
+            if rest.startswith("bad"):
+                # On error real PyStata streams nothing; the whole transcript is in the exception.
+                raise SystemError(head + (". " + rest + "\n" if echo else "")
+                                  + "command bad is unrecognized\nr(199);\nr(199);\n")
+            print(head + (". " + rest + "\n" if echo else "") + f"ran: {rest}")
+            return
+        if code.startswith("display "):
+            expr = code[len("display "):]
+            if expr.startswith("nosuch"):
+                raise SystemError(f"{expr} not found\nr(111);")
+            print(f"  {eval(expr, {})}  ")
+            return
         if code.startswith("qui graph export"):
             if not self.graphs:
                 raise SystemError("no graphs in memory\nr(693);")
@@ -95,6 +120,84 @@ class FakeMacro:
     def getGlobal(self, name):
         return self.values.get(name, "")
 
+    def setGlobal(self, name, value):
+        if value:
+            self.values[name] = value
+        else:
+            self.values.pop(name, None)
+
+
+MISSING = 8.98846567431158e307
+
+
+class FakeResults:
+    """Stored results plus the sfi pieces (SFIToolkit, Scalar, Matrix, Frame) that read them."""
+
+    def __init__(self, macro):
+        self.macro = macro
+        self.stata_calls = []
+        self.scalars = {}  # "e(N)" -> value
+        self.matrices = {}  # "e(b)" -> (values, rownames, colnames)
+        self.frames = [("default", 74, 2)]
+        self.cwf = "default"
+
+    # SFIToolkit
+    def stata(self, cmd):
+        self.stata_calls.append(cmd)
+        for g, cls, kind in re.findall(r'st_global\("(\w+)", invtokens\(st_dir\("(\w)\(\)", "(\w+)"', cmd):
+            if kind == "numscalar":
+                names = [k for k in self.scalars if k.startswith(cls + "(")]
+            elif kind == "matrix":
+                names = [k for k in self.matrices if k.startswith(cls + "(")]
+            else:
+                names = [k for k in self.macro.values if k.startswith(cls + "(")]
+            self.macro.values[g] = " ".join(k[2:-1] for k in names)
+
+    def macroExpand(self, text):
+        m = re.fullmatch(r"`: (row|col)fullnames (\w\(\w+\))'", text)
+        values, rows, cols = self.matrices[m.group(2)]
+        return " ".join(rows if m.group(1) == "row" else cols)
+
+    # Scalar
+    def getValue(self, name):
+        return self.scalars.get(name)
+
+    # Matrix
+    def get(self, name):
+        return [list(r) for r in self.matrices[name][0]]
+
+    def getRowTotal(self, name):
+        return len(self.matrices[name][0])
+
+    def getColTotal(self, name):
+        return len(self.matrices[name][0][0])
+
+    def getRowNames(self, name):
+        return [n.split(":")[-1] for n in self.matrices[name][1]]
+
+    def getColNames(self, name):
+        return [n.split(":")[-1] for n in self.matrices[name][2]]
+
+    # Frame
+    def getCWF(self):
+        return self.cwf
+
+    def getFrameCount(self):
+        return len(self.frames)
+
+    def getFrameAt(self, i):
+        return self.frames[i][0]
+
+    def connect(self, name):
+        _, obs, nvars = next(f for f in self.frames if f[0] == name)
+        return types.SimpleNamespace(
+            getObsTotal=lambda: obs,
+            getVarCount=lambda: nvars,
+            getVarName=lambda i: f"v{i}",
+            getVarType=lambda i: "float",
+            getVarLabel=lambda i: f"label {i}",
+        )
+
 
 class FakeValueLabel:
     @staticmethod
@@ -107,6 +210,9 @@ def install_fakes():
     sfi.Data = FakeData()
     sfi.Macro = FakeMacro()
     sfi.ValueLabel = FakeValueLabel()
+    results = FakeResults(sfi.Macro)
+    sfi.results = results
+    sfi.SFIToolkit = sfi.Scalar = sfi.Matrix = sfi.Frame = results
     stata = FakeStata(sfi.Macro)
     config = types.ModuleType("pystata.config")
     config.init = lambda edition, **_kwargs: None
@@ -212,6 +318,281 @@ class TestStataEngineUnit(_EngineTestCase):
         self.assertEqual(info["var_value_labels"]["price"], "")
 
 
+class TestDelimitUnit(_EngineTestCase):
+    def run_streamed(self, code):
+        chunks = []
+        res = self.engine.execute(code, stdout_callback=chunks.append)
+        return res, "".join(chunks)
+
+    def test_lone_directive_is_handled_by_the_kernel(self):
+        for code, expected in (("#delimit ;", True), ("#delimit cr", False), ("#d ;", True),
+                               ("#d cr", False), ("#delimit ; // switch", True), ("  #delim ; /* c */", True)):
+            res, streamed = self.run_streamed(code)
+            self.assertIsNone(res.error, code)
+            self.assertEqual(self.engine.semicolon_delimiter, expected, code)
+            self.assertEqual(streamed, f"delimiter now {';' if expected else 'cr'}\n")
+        self.assertFalse(any(c.lstrip().startswith("#") for c in self.stata.commands),
+                         "a lone #delimit must never reach PyStata's single-line path")
+
+    def test_semicolon_mode_single_line_is_unechoed_and_clean(self):
+        self.engine.execute("#delimit ;")
+        res, streamed = self.run_streamed("summarize price;")
+        self.assertEqual(self.stata.commands[-1], "#delimit ;\nsummarize price;")
+        self.assertEqual(self.stata.kwargs[-1], {"echo": False})
+        self.assertEqual(streamed, "ran: summarize price;\n")
+        self.assertEqual(res.stdout, "ran: summarize price;\n")
+        self.assertTrue(self.engine.semicolon_delimiter, "state persists across executions")
+
+
+    def test_semicolon_mode_multi_line_hides_injected_directive(self):
+        self.engine.execute("#delimit ;")
+        res, streamed = self.run_streamed("regress price\n  mpg;")
+        self.assertEqual(streamed, "\n. regress price\n  mpg;\nran: regress price\n  mpg;\n")
+        self.assertNotIn("#delimit", res.stdout)
+
+    def test_semicolon_mode_error_message_hides_injected_directive(self):
+        self.engine.execute("#delimit ;")
+        res = self.engine.execute("bad;")
+        self.assertEqual(res.error, "command bad is unrecognized\nr(199);\nr(199);")
+        res = self.engine.execute("bad;\ndisplay 1;")
+        self.assertTrue(res.error.startswith("\n. bad;"), res.error)
+
+    def test_mid_block_switches_track_final_state(self):
+        self.engine.execute("sysuse auto\n#delimit ;\nsummarize price\n mpg;")
+        self.assertTrue(self.engine.semicolon_delimiter)
+        self.engine.execute("display 1; #delimit cr\ndisplay 2")
+        self.assertFalse(self.engine.semicolon_delimiter)
+        self.assertEqual(self.stata.commands[-1], "#delimit ;\ndisplay 1; #delimit cr\ndisplay 2")
+        self.engine.execute("summarize")
+        self.assertEqual(self.stata.commands[-1], "summarize")
+
+    def test_cr_mode_code_is_run_unchanged(self):
+        self.engine.execute("summarize price")
+        self.assertEqual(self.stata.commands[-1], "summarize price")
+        self.assertEqual(self.stata.kwargs[-1], {})
+
+    def test_directives_in_strings_or_comments_are_ignored(self):
+        self.engine.execute('display "#delimit ;"')
+        self.engine.execute("* #delimit ;\ndisplay 1")
+        self.engine.execute("display 1 // #delimit ;")
+        self.assertFalse(self.engine.semicolon_delimiter)
+
+    def test_non_interactive_execution_ignores_and_keeps_state(self):
+        self.engine.execute("#delimit ;")
+        self.engine.execute("help regress", interactive=False)
+        self.assertEqual(self.stata.commands[-1], "help regress")
+        self.assertTrue(self.engine.semicolon_delimiter)
+
+    def test_browse_with_semicolon_opens_data_explorer(self):
+        self.engine.execute("#delimit ;")
+        self.assertTrue(self.engine.execute("browse;").request_open_data_explorer)
+
+
+class TestPauseGuardUnit(_EngineTestCase):
+    def test_override_is_prepended_to_adopath_once(self):
+        self.sfi.Macro.values["S_ADO"] = "BASE;SITE;.;PERSONAL;PLUS;OLDPLACE"
+        self.engine.execute("summarize")
+        self.engine.execute("summarize")
+        ado_path = self.sfi.Macro.values["S_ADO"]
+        m = re.fullmatch(r'`"([^"]+)"\';BASE;SITE;\.;PERSONAL;PLUS;OLDPLACE', ado_path)
+        self.assertIsNotNone(m, ado_path)
+        with open(os.path.join(m.group(1), "pause.ado"), encoding="utf-8") as f:
+            ado = f.read()
+        self.assertIn("program define pause", ado)
+        self.assertNotIn("_request", ado, "the override must never read the console")
+
+    def test_install_runs_no_stata_commands(self):
+        # Running ado code such as `adopath ++` would overwrite r().
+        self.engine.execute("summarize")
+        self.assertEqual(self.stata.commands, ["summarize"])
+
+    def test_note_is_shown_once_on_stderr(self):
+        from positron_stata_kernel.stata_engine import PAUSE_NOTE
+        errs = []
+        res = self.engine.execute("pause on\npause here", stderr_callback=errs.append)
+        self.assertEqual(errs, [PAUSE_NOTE])
+        self.assertIn(PAUSE_NOTE, res.stderr)
+        errs.clear()
+        self.engine.execute("pause on", stderr_callback=errs.append)
+        self.assertEqual(errs, [])
+
+    def test_no_note_without_pause_on(self):
+        errs = []
+        self.engine.execute("pause off", stderr_callback=errs.append)
+        self.engine.execute('display "pause on"', stderr_callback=errs.append)
+        self.assertEqual(errs, [])
+
+    def test_failed_install_falls_back_to_pause_off(self):
+        self.sfi.Macro.values["PAUSEON"] = "yes"
+        original = self.sfi.Macro.setGlobal
+
+        def failing(name, value):
+            if name == "S_ADO":
+                raise RuntimeError("cannot set S_ADO")
+            return original(name, value)
+
+        self.sfi.Macro.setGlobal = failing
+        self.engine.execute("summarize")
+        self.assertNotIn("PAUSEON", self.sfi.Macro.values)
+
+
+class TestExpressionsUnit(_EngineTestCase):
+    def test_value_is_trimmed(self):
+        self.assertEqual(self.engine.evaluate_expression("2+2"), (True, "4"))
+        self.assertEqual(self.stata.kwargs[-1], {"echo": False})
+
+    def test_error_returns_stata_message(self):
+        self.assertEqual(self.engine.evaluate_expression("nosuch"), (False, "nosuch not found\nr(111);"))
+
+    def test_bad_input_is_rejected_without_running(self):
+        before = len(self.stata.commands)
+        self.assertFalse(self.engine.evaluate_expression("   ")[0])
+        self.assertFalse(self.engine.evaluate_expression("1\ndisplay 2")[0])
+        self.assertEqual(len(self.stata.commands), before)
+
+    def test_trailing_semicolon_is_dropped(self):
+        self.assertEqual(self.engine.evaluate_expression("3*3;"), (True, "9"))
+
+    def test_expression_output_is_captured_not_printed(self):
+        import contextlib
+        import io
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            self.assertEqual(self.engine.evaluate_expression("1+1"), (True, "2"))
+        self.assertEqual(buf.getvalue(), "")
+
+
+class TestInterruptUnit(_EngineTestCase):
+    def setUp(self):
+        super().setUp()
+        self.engine.initialize()
+        self.breaks = []
+        self.engine._stlib = types.SimpleNamespace(StataSO_SetBreak=lambda: self.breaks.append(1))
+
+    def test_break_only_during_user_code(self):
+        self.assertFalse(self.engine.request_break(), "idle: nothing to stop")
+        results = []
+
+        def run(code, **kwargs):
+            results.append(self.engine.request_break())
+            raise SystemError("--Break--\nr(1);")
+
+        self.stata.run = run
+        res = self.engine.execute("forvalues i = 1/1000000 {\n}")
+        self.assertEqual(results, [True])
+        self.assertEqual(self.breaks, [1])
+        self.assertTrue(res.interrupted)
+        self.assertIn("--Break--", res.error)
+        self.assertFalse(self.engine.is_running_user_code)
+
+    def test_keyboard_interrupt_becomes_break_error(self):
+        def run(code, **kwargs):
+            raise KeyboardInterrupt
+
+        self.stata.run = run
+        res = self.engine.execute("display 1")
+        self.assertTrue(res.interrupted)
+        self.assertEqual(res.error, "--Break--\nr(1);")
+
+
+class TestValueLabelsUnit(unittest.TestCase):
+    def setUp(self):
+        from positron_stata_kernel import stata_engine
+        self.mod = stata_engine
+
+    def test_categorical_follows_code_order(self):
+        cat = self.mod.labeled_categorical([2, 1, float("nan"), 3, 1], {1: "zeta", 2: "alpha"})
+        self.assertTrue(cat.ordered)
+        self.assertEqual(list(cat.categories), ["zeta", "alpha", "3"])
+        self.assertEqual(list(cat.codes), [1, 0, -1, 2, 0])
+
+    def test_duplicate_labels_stay_distinct(self):
+        cat = self.mod.labeled_categorical([1, 2], {1: "x", 2: "x"})
+        self.assertEqual(list(cat.categories), ["x", "x (2)"])
+
+    def test_env_switch(self):
+        old = os.environ.get("POSITRON_STATA_VALUE_LABELS")
+        try:
+            os.environ.pop("POSITRON_STATA_VALUE_LABELS", None)
+            self.assertTrue(self.mod.value_labels_enabled())
+            os.environ["POSITRON_STATA_VALUE_LABELS"] = "0"
+            self.assertFalse(self.mod.value_labels_enabled())
+        finally:
+            if old is None:
+                os.environ.pop("POSITRON_STATA_VALUE_LABELS", None)
+            else:
+                os.environ["POSITRON_STATA_VALUE_LABELS"] = old
+
+
+class TestStoredResultsUnit(_EngineTestCase):
+    def setUp(self):
+        super().setUp()
+        self.engine.initialize()
+        r = self.sfi.results
+        m = self.sfi.Macro.values
+        m.update({"e(cmd)": "regress", "e(cmdline)": "regress price mpg", "e(_internal)": "x"})
+        r.scalars.update({"e(N)": 74.0, "e(r2)": 0.2934, "r(mean)": 6165.25, "r(max)": MISSING})
+        r.matrices["e(b)"] = ([[-238.9, 11253.1]], ["y1"], ["mpg", "_cons"])
+        r.matrices["e(V)"] = ([[1.0, 2.0], [2.0, MISSING]], ["mpg", "_cons"], ["mpg", "_cons"])
+
+    def test_names_come_from_st_dir_and_skip_internal(self):
+        names = self.engine.get_stored_result_names()
+        self.assertEqual(names[("e", "macro")], ["cmd", "cmdline"])
+        self.assertEqual(names[("e", "numscalar")], ["N", "r2"])
+        self.assertEqual(names[("e", "matrix")], ["b", "V"])
+        self.assertEqual(names[("r", "numscalar")], ["mean", "max"])
+        self.assertEqual(len(self.sfi.results.stata_calls), 1, "one Mata call enumerates everything")
+        self.assertTrue(self.sfi.results.stata_calls[0].startswith("mata: "))
+        self.assertFalse([k for k in self.sfi.Macro.values if k.startswith("positron_stata_")],
+                         "helper globals must be cleaned up")
+
+    def test_values(self):
+        res = self.engine.get_stored_results("e")
+        self.assertIn(("cmdline", "regress price mpg"), res["macro"])
+        self.assertIn(("N", 74.0), res["numscalar"])
+        self.assertEqual(res["matrix"], [("b", 1, 2), ("V", 2, 2)])
+
+    def test_matrix_missing_values_and_names(self):
+        values, rows, cols = self.engine.get_matrix("e", "V")
+        self.assertEqual(values, [[1.0, 2.0], [2.0, None]])
+        self.assertEqual(rows, ["mpg", "_cons"])
+        df = self.engine.get_matrix_dataframe("e", "V")
+        self.assertEqual(list(df.index), ["mpg", "_cons"])
+        self.assertEqual(list(df.columns), ["mpg", "_cons"])
+        self.assertTrue(df.isna().iloc[1, 1])
+
+    def test_equation_names_keep_columns_unique(self):
+        self.sfi.results.matrices["e(b)"] = ([[1.0, 2.0, 3.0, 4.0]], ["y1"], ["1:mpg", "1:_cons", "2:mpg", "2:_cons"])
+        self.assertEqual(list(self.engine.get_matrix_dataframe("e", "b").columns),
+                         ["1:mpg", "1:_cons", "2:mpg", "2:_cons"])
+
+    def test_results_change_detection(self):
+        self.engine.execute("regress price mpg")
+        self.assertFalse(self.engine.execute("display 1").results_changed)
+        self.sfi.results.scalars["r(mean)"] = 21.3
+        self.assertTrue(self.engine.execute("summarize mpg").results_changed)
+        self.sfi.Macro.values["e(cmdline)"] = "regress price weight"
+        self.assertTrue(self.engine.execute("regress price weight").results_changed)
+        self.sfi.results.frames.append(("other", 3, 1))
+        self.assertTrue(self.engine.execute("frame create other").results_changed)
+        self.assertFalse(self.engine.execute("display 2").results_changed)
+
+    def test_frames(self):
+        self.sfi.results.frames.append(("other", 3, 1))
+        self.assertEqual(self.engine.get_frames(), [
+            {"name": "default", "obs": 74, "vars": 2, "current": True},
+            {"name": "other", "obs": 3, "vars": 1, "current": False},
+        ])
+        self.assertEqual(self.engine.get_frame_variables("other"), [("v0", "float", "label 0")])
+
+    def test_enumeration_failure_is_harmless(self):
+        def boom(_cmd):
+            raise SyntaxError("failed to execute the specified Stata command")
+        self.sfi.SFIToolkit = types.SimpleNamespace(stata=boom)
+        self.engine._sfi = self.sfi
+        self.assertEqual(self.engine.get_stored_results("e"), {"numscalar": [], "macro": [], "matrix": []})
+
+
 class TestAgainstGoldenFixture(_EngineTestCase):
     """Checks the engine and the stand-in against results recorded from a real Stata run."""
 
@@ -268,7 +649,7 @@ class TestStataHelpHandler(unittest.TestCase):
         from positron_stata_kernel.help_handler import StataHelpHandler
 
         class MockEngine:
-            def execute(self, cmd):
+            def execute(self, cmd, **_kwargs):
                 class MockRes:
                     stdout = "[R] regress -- Linear regression syntax"
                     error = None

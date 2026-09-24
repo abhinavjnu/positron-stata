@@ -48,7 +48,7 @@ class StataUiHandler:
         elif isinstance(request, EvaluateCodeRequest):
             code = request.params.code
             try:
-                res = self.kernel.engine.execute(code)
+                res = self.kernel.engine.execute(code, interactive=False)
                 if self._comm is not None:
                     if res.error:
                         self._comm.send_error(JsonRpcErrorCode.INTERNAL_ERROR, res.error)

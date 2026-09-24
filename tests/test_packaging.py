@@ -49,6 +49,13 @@ class TestPackaging(unittest.TestCase):
             self.assertIn("extension/kernel/positron_stata_kernel/stata_engine.py", namelist)
             self.assertIn("extension/kernel/positron_stata_kernel/_positron_loader.py", namelist)
             self.assertIn("extension/kernel/positron_stata_kernel/completer.py", namelist)
+            # Every walkthrough page referenced from package.json must ship
+            pkg = json.loads(zf.read("extension/package.json").decode("utf-8"))
+            for wt in pkg["contributes"].get("walkthroughs", []):
+                for step in wt["steps"]:
+                    md = step.get("media", {}).get("markdown")
+                    if md:
+                        self.assertIn(f"extension/{md}", namelist)
             print(f"[PASS] All {len(namelist)} expected package assets verified.")
 
     def test_manifest_xml_validity(self):

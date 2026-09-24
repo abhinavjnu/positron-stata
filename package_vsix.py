@@ -97,6 +97,13 @@ def build_vsix():
         "syntaxes/stata.tmLanguage.json",
     ]
 
+    # Getting-started walkthrough pages referenced from package.json
+    walkthrough_dir = os.path.join(base_dir, "walkthrough")
+    if os.path.isdir(walkthrough_dir):
+        for file in sorted(os.listdir(walkthrough_dir)):
+            if file.endswith((".md", ".png", ".svg")):
+                files_to_include.append(f"walkthrough/{file}")
+
     # Include kernel directory recursively
     kernel_dir = os.path.join(base_dir, "kernel")
     for root, dirs, files in os.walk(kernel_dir):

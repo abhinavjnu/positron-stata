@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { describeInstallation, findStataInstallations, resolvePythonExecutable } from '../src/discovery.ts';
+import { describeInstallation, findStataInstallations, resolveConfiguredHome, resolvePythonExecutable } from '../src/discovery.ts';
 
 const norm = (p: string) => p.replace(/\\/g, '/').toLowerCase();
 const existsIn = (paths: string[]) => {
@@ -123,4 +123,65 @@ test('prefers version-specific python over generic python3 in PATH', () => {
         listDir: noDirs
     });
     assert.equal(python, '/usr/local/bin/python3.12');
+});
+
+test('reads version and StataNow from install marker files', () => {
+    const found = findStataInstallations({
+        env: {},
+        exists: existsIn(['/usr/local/stata19', '/usr/local/stata19/stata-mp', '/usr/local/stata19/utilities/pystata']),
+        listDir: dir => (dir === '/usr/local/stata19' ? ['isstata.195', 'installed.190', 'installed.195', 'stata-mp'] : [])
+    });
+    assert.equal(found.length, 1);
+    assert.equal(found[0].version, '19');
+    assert.equal(found[0].fullVersion, '19.5');
+    assert.equal(found[0].versionSource, 'install files');
+    assert.equal(found[0].isStataNow, true);
+    assert.equal(found[0].hasPyStata, true);
+    assert.equal(found[0].displayName, 'StataNow 19 MP (Parallel Edition)');
+});
+
+test('finds StataNow and future Stata folders on Linux', () => {
+    const found = findStataInstallations({
+        env: {},
+        exists: existsIn(['/usr/local/statanow19', '/usr/local/statanow19/stata-se', '/opt/stata21', '/opt/stata21/stata'])
+    });
+    assert.deepEqual(found.map(f => [f.homeDir, f.version, f.edition]), [
+        ['/usr/local/statanow19', '19', 'se'],
+        ['/opt/stata21', '21', 'be']
+    ]);
+    assert.equal(found[0].isStataNow, true);
+    assert.equal(found[0].hasPyStata, false);
+});
+
+test('stataHome may point to a macOS .app bundle or executable', () => {
+    const exe = '/Applications/StataNow/StataMP.app/Contents/MacOS/stata-mp';
+    const paths = ['/Applications/StataNow/StataMP.app', exe];
+    for (const configHome of ['/Applications/StataNow/StataMP.app', exe]) {
+        const [inst] = findStataInstallations({ env: {}, exists: existsIn(paths), configHome });
+        assert.equal(inst.homeDir, '/Applications/StataNow', configHome);
+        assert.equal(inst.executable, exe, configHome);
+        assert.equal(inst.edition, 'mp', configHome);
+    }
+    assert.deepEqual(resolveConfiguredHome('/usr/local/stata19/stata-se', existsIn(['/usr/local/stata19/stata-se'])), {
+        homeDir: '/usr/local/stata19', executable: '/usr/local/stata19/stata-se', edition: 'se'
+    });
+});
+
+test('a Stata folder on PATH does not duplicate the standard one', () => {
+    const found = findStataInstallations({
+        env: { PATH: '/usr/local/stata19:/usr/bin' },
+        exists: existsIn(['/usr/local/stata19', '/usr/local/stata19/stata-mp', '/usr/local/stata19/utilities'])
+    });
+    assert.equal(found.length, 1);
+    assert.equal(found[0].homeDir, '/usr/local/stata19');
+});
+
+test('versioned Pythons in standard locations beat a generic python3 on PATH (may be 3.14)', () => {
+    const python = resolvePythonExecutable({
+        platform: 'darwin',
+        env: { PATH: '/opt/homebrew/bin' },
+        exists: existsIn(['/opt/homebrew/bin/python3', '/opt/homebrew/bin/python3.14', '/Library/Frameworks/Python.framework/Versions/3.12/bin/python3']),
+        listDir: noDirs
+    });
+    assert.equal(python, '/Library/Frameworks/Python.framework/Versions/3.12/bin/python3');
 });

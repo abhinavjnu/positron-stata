@@ -14,8 +14,10 @@
     { "open": "[", "close": "]" },
     { "open": "(", "close": ")" },
     { "open": "\"", "close": "\"", "notIn": ["string"] },
-    { "open": "`", "close": "'", "notIn": ["string", "comment"] }
+    { "open": "`", "close": "'", "notIn": ["comment"] },
+    { "open": "`\"", "close": "\"'", "notIn": ["comment"] }
   ],
+  "autoCloseBefore": ";:.,=}])> \n\t\"'",
   "surroundingPairs": [
     ["{", "}"],
     ["[", "]"],
@@ -23,9 +25,10 @@
     ["\"", "\""],
     ["`", "'"]
   ],
+  "wordPattern": "(-?\\d*\\.\\d\\w*)|([A-Za-z_][A-Za-z0-9_]*)|(\\d+)",
   "indentationRules": {
-    "increaseIndentPattern": "^.*\\{\\s*(//.*)?$",
-    "decreaseIndentPattern": "^\\s*\\}"
+    "increaseIndentPattern": "^(?:.*\\{|\\s*(?:(?:cap|capt|captu|captur|capture)\\s+)?(?:pr|pro|prog|progr|progra|program)\\s+(?:(?:de|def|defi|defin|define)\\s+)?(?!(?:drop|dir|list)\\b)[A-Za-z_][\\w.]*(?:\\s*,.*)?|\\s*mata\\s*:?)\\s*(?://.*)?$",
+    "decreaseIndentPattern": "^\\s*(?:\\}|end\\b)"
   },
   "folding": {
     "markers": {
