@@ -1,6 +1,5 @@
 // Pure (vscode-free) Stata statement parsing: statement ranges for "run statement and advance"
 // and help-topic lookup. Both need the same lexical model (strings, comments, `///`, `#delimit`).
-import { programName } from './cellParser';
 import { resolveCommand, resolveFunction } from './stataCommands';
 
 export interface Pos {
@@ -46,17 +45,27 @@ const IF_START = new RegExp(`^${PREFIX}if\\b`);
 const ELSE_START = /^else\b/;
 /** Same rule as the kernel: `#d` .. `#delimit`, any argument other than exactly `cr` means `;`. */
 const DELIMIT = /^#d(?:e(?:l(?:i(?:m(?:i(?:t)?)?)?)?)?)?(?![A-Za-z0-9_])(.*)$/;
+const PROGRAM_START =
+    /^\s*(?:(?:cap|capt|captu|captur|capture)\s+)?(?:pr|pro|prog|progr|progra|program)\s+(?:(?:de|def|defi|defin|define)\s+)?([A-Za-z_][\w.]*)\s*(?:,.*)?(?:\/\/.*)?$/;
+const PROGRAM_SUBCOMMANDS = new Set(['drop', 'dir', 'list']);
+
+/** Name of the program defined by this code (`program [define] NAME`), if any. */
+export function programName(code: string): string | undefined {
+    const m = PROGRAM_START.exec(code);
+    return m && !PROGRAM_SUBCOMMANDS.has(m[1]) ? m[1] : undefined;
+}
 
 const isWs = (ch: string | undefined) => ch !== undefined && /\s/.test(ch);
 /** `//` and `///` only count at line start or after whitespace. */
 const startsLineComment = (line: string, k: number) => line[k] === '/' && line[k + 1] === '/' && (k === 0 || isWs(line[k - 1]));
 const CONTINUATION = /(?:^|\s)\/\/\//;
 
-function stripComments(text: string): string {
+/** Drop `/* *\/` and `//` comments from a single line. */
+export function stripComments(text: string): string {
     return text.replace(/\/\*.*?\*\//g, ' ').replace(/(?:^|\s)\/\/.*$/, '');
 }
 
-export function comparePos(a: Pos, b: Pos): number {
+function comparePos(a: Pos, b: Pos): number {
     return a.line - b.line || a.character - b.character;
 }
 
@@ -319,6 +328,31 @@ export function parseStatements(lines: readonly string[]): Statement[] {
         i = last + 1;
     }
     return out;
+}
+
+export interface Block {
+    kind: 'program' | OpaqueBlockKind;
+    name: string;
+    start: number;
+    end: number;
+}
+
+/** Line ranges of `program ... end` and opaque `mata`/`python`/`input ... end` blocks. */
+export function findBlocks(lines: readonly string[]): Block[] {
+    const blocks: Block[] = [];
+    let program: { name: string; start: number } | undefined;
+    for (const r of lexStatements(lines)) {
+        if (r.block) {
+            blocks.push({ kind: r.block, name: r.block, start: r.start.line, end: r.end.line });
+        } else if (program && END_STATEMENT.test(r.code)) {
+            blocks.push({ kind: 'program', ...program, end: r.end.line });
+            program = undefined;
+        } else if (!program) {
+            const name = programName(r.code);
+            if (name) program = { name, start: r.start.line };
+        }
+    }
+    return blocks.sort((a, b) => a.start - b.start);
 }
 
 /**

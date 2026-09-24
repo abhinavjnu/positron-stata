@@ -1,7 +1,8 @@
-// Pure do-file parsing helpers (cells, sections, programs, folding, macros). No `vscode` imports.
+// Pure do-file parsing helpers (cells, sections, folding, outline, macros). No `vscode` imports.
+import { findBlocks, stripComments } from './statementParser';
 
 /** Cell marker: `* %%` or `// %%` (optionally followed by a title). */
-export const CELL_MARKER = /^\s*(?:\*|\/\/)\s*%%/;
+const CELL_MARKER = /^\s*(?:\*|\/\/)\s*%%/;
 /** Stata 18+ bookmark heading: `**#` .. `**######` followed by an optional title. */
 const SECTION_HEADING = /^\s*\*\*(#{1,6})(?!#)\s*(.*?)\s*$/;
 
@@ -90,7 +91,7 @@ export function sectionCode(lines: readonly string[], sections: readonly Section
     return rangeCode(lines, r.start + 1, r.end);
 }
 
-export function trimBlankLines(lines: readonly string[]): string[] {
+function trimBlankLines(lines: readonly string[]): string[] {
     let a = 0;
     let b = lines.length;
     while (a < b && lines[a].trim() === '') {
@@ -134,66 +135,6 @@ export function sectionIndexAt(sections: readonly Section[], line: number): numb
         }
     }
     return -1;
-}
-
-// ---- Programs and blocks ---------------------------------------------------
-
-const PROGRAM_START =
-    /^\s*(?:(?:cap|capt|captu|captur|capture)\s+)?(?:pr|pro|prog|progr|progra|program)\s+(?:(?:de|def|defi|defin|define)\s+)?([A-Za-z_][\w.]*)\s*(?:,.*)?(?:\/\/.*)?$/;
-const PROGRAM_SUBCOMMANDS = new Set(['drop', 'dir', 'list']);
-const MATA_START = /^\s*(?:(?:cap|capture)\s+)?mata\s*(?::\s*)?(?:\/\/.*)?$/;
-const PYTHON_START = /^\s*(?:(?:cap|capture)\s+)?python\s*(?::\s*)?(?:\/\/.*)?$/;
-const INPUT_START = /^\s*input\b/;
-const BLOCK_END = /^\s*end\b/;
-
-/** Name of the program defined on this line (`program [define] NAME`), if any. */
-export function programName(line: string): string | undefined {
-    const m = PROGRAM_START.exec(line);
-    if (!m || PROGRAM_SUBCOMMANDS.has(m[1])) {
-        return undefined;
-    }
-    return m[1];
-}
-
-export type BlockKind = 'program' | 'mata' | 'python' | 'input';
-
-export interface Block extends LineRange {
-    kind: BlockKind;
-    name: string;
-}
-
-/** `program ... end`, `mata ... end`, `python ... end`, and `input ... end` blocks (nesting supported). */
-export function findBlocks(lines: readonly string[]): Block[] {
-    const blocks: Block[] = [];
-    const stack: { kind: BlockKind; name: string; start: number }[] = [];
-    lines.forEach((l, i) => {
-        const top = stack[stack.length - 1];
-        // Python and input bodies are opaque: only `end` terminates them.
-        if (top?.kind !== 'python' && top?.kind !== 'input') {
-            if (top?.kind !== 'mata' && INPUT_START.test(l)) {
-                stack.push({ kind: 'input', name: 'input', start: i });
-                return;
-            }
-            const name = programName(l);
-            if (name) {
-                stack.push({ kind: 'program', name, start: i });
-                return;
-            }
-            if (MATA_START.test(l)) {
-                stack.push({ kind: 'mata', name: 'mata', start: i });
-                return;
-            }
-            if (PYTHON_START.test(l)) {
-                stack.push({ kind: 'python', name: 'python', start: i });
-                return;
-            }
-        }
-        if (BLOCK_END.test(l) && stack.length) {
-            const open = stack.pop()!;
-            blocks.push({ kind: open.kind, name: open.name, start: open.start, end: i });
-        }
-    });
-    return blocks.sort((a, b) => a.start - b.start);
 }
 
 // ---- Folding ---------------------------------------------------------------
@@ -279,12 +220,10 @@ export function computeFoldingRanges(lines: readonly string[]): FoldRange[] {
         }
     });
 
-    if (hasCellMarkers(lines)) {
-        for (const cell of findCells(lines)) {
-            const end = lastNonBlank(cell.start, cell.end);
-            if (cell.markerLine !== undefined && end > cell.start) {
-                ranges.push({ start: cell.start, end, kind: 'region' });
-            }
+    for (const cell of findCells(lines)) {
+        const end = lastNonBlank(cell.start, cell.end);
+        if (cell.markerLine !== undefined && end > cell.start) {
+            ranges.push({ start: cell.start, end, kind: 'region' });
         }
     }
 
@@ -338,11 +277,9 @@ export function buildOutline(lines: readonly string[]): OutlineNode[] {
         const r = sectionRange(sections, i, lines.length);
         return { name: s.title || `Section ${'#'.repeat(s.level)}`, kind: 'section', line: s.line, level: s.level, ...r, children: [] };
     });
-    if (hasCellMarkers(lines)) {
-        for (const c of findCells(lines)) {
-            if (c.markerLine !== undefined) {
-                items.push({ name: c.title || `Cell (line ${c.markerLine + 1})`, kind: 'cell', line: c.markerLine, level: 99, start: c.start, end: c.end, children: [] });
-            }
+    for (const c of findCells(lines)) {
+        if (c.markerLine !== undefined) {
+            items.push({ name: c.title || `Cell (line ${c.markerLine + 1})`, kind: 'cell', line: c.markerLine, level: 99, start: c.start, end: c.end, children: [] });
         }
     }
     for (const b of findBlocks(lines)) {
@@ -405,13 +342,9 @@ function identifiersIn(text: string): string[] {
     return text.split(/\s+/).filter(w => new RegExp(`^${IDENT}$`).test(w));
 }
 
-/** Strip `//` line comments and skip `*` comment lines (approximate; ignores `//` inside strings). */
+/** Strip comments and skip `*` comment lines (approximate; ignores `//` inside strings). */
 function codeOf(line: string): string {
-    if (/^\s*\*/.test(line)) {
-        return '';
-    }
-    const idx = line.search(/(^|\s)\/\//);
-    return idx >= 0 ? line.slice(0, idx) : line;
+    return /^\s*\*/.test(line) ? '' : stripComments(line);
 }
 
 /** Local macro names defined in the document (local, tempvar/tempname/tempfile, loop variables, args, syntax, ...). */

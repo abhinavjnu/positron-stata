@@ -42,12 +42,6 @@ export function activate(context: vscode.ExtensionContext) {
     const dtaEditorRegistration = DtaCustomEditorProvider.register(context);
     context.subscriptions.push(dtaEditorRegistration);
 
-    // 3. Register Command: Run Line or Selection
-    context.subscriptions.push(
-        vscode.commands.registerCommand('stata.runLineOrSelection', async () => {
-            await vscode.commands.executeCommand('workbench.action.positronConsole.executeCode');
-        })
-    );
 
     // 4. Register Command: Do File (Ctrl+Shift+D)
     context.subscriptions.push(

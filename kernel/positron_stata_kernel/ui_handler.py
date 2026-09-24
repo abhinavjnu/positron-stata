@@ -4,10 +4,8 @@ Handles general UI requests like console width, module queries, and working dire
 """
 
 import logging
-import os
-import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
 from . import _positron_loader
 from positron.positron_comm import PositronComm, JsonRpcErrorCode

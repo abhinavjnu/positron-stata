@@ -8,17 +8,16 @@ import {
     extractDocumentVariables,
     extractGlobalMacros,
     extractLocalMacros,
-    findBlocks,
     findCells,
     findSections,
     hasCellMarkers,
     isCellMarker,
-    programName,
     rangeCode,
     sectionCode,
     sectionIndexAt,
     sectionRange
 } from '../src/cellParser.ts';
+import { findBlocks, programName } from '../src/statementParser.ts';
 
 const doc = (s: string) => s.replace(/^\n/, '').split('\n');
 

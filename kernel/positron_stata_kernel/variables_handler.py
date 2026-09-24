@@ -5,9 +5,8 @@ estimation (e()) and stored (r()) results, other frames,
 and sends events to refresh the Variables pane.
 """
 
-import sys
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
 from . import _positron_loader
 from positron.variables_comm import (

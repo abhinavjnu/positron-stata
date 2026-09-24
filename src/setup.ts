@@ -33,7 +33,7 @@ export function findInstallations(): StataInstallation[] {
 }
 
 /** `<appRoot>/extensions/positron-python/python_files/posit`, which also tells the kernel where ipykernel lives. */
-export function getPositronPythonFilesPath(): string | undefined {
+function getPositronPythonFilesPath(): string | undefined {
     const candidates = [
         vscode.env.appRoot && path.join(vscode.env.appRoot, 'extensions', 'positron-python', 'python_files', 'posit'),
         '/usr/share/positron/resources/app/extensions/positron-python/python_files/posit',
@@ -67,14 +67,14 @@ interface CacheEntry {
     stamps: Record<string, number>;
 }
 
-export interface EvaluatedCandidate {
+interface EvaluatedCandidate {
     candidate: PythonCandidate;
     result: ProbeResult;
     verdict: Verdict;
     cached: boolean;
 }
 
-export interface Selection {
+interface Selection {
     selected?: EvaluatedCandidate;
     evaluated: EvaluatedCandidate[];
 }
@@ -139,7 +139,7 @@ export class StataEnvironment implements vscode.Disposable {
         }
     }
 
-    async candidates(): Promise<PythonCandidate[]> {
+    private async candidates(): Promise<PythonCandidate[]> {
         return enumeratePythonCandidates({
             platform: process.platform,
             env: process.env,
@@ -292,11 +292,7 @@ export class StataEnvironment implements vscode.Disposable {
                         report: message => progress.report({ message }),
                         token,
                         confirmDownload: async message =>
-                            (await vscode.window.showInformationMessage(message, { modal: true }, 'Download and Set Up')) === 'Download and Set Up',
-                        baseInterpreters: async () => {
-                            const { evaluated } = await this.selectPython({ all: true });
-                            return evaluated.filter(e => e.verdict.baseOk).map(e => ({ path: e.result.executable || e.candidate.path, source: e.candidate.source }));
-                        }
+                            (await vscode.window.showInformationMessage(message, { modal: true }, 'Download and Set Up')) === 'Download and Set Up'
                     })
             );
             await this.selectPython({ force: true });

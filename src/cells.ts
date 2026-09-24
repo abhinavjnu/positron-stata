@@ -65,85 +65,63 @@ function firstBodyLine(cell: Cell): number {
     return cell.markerLine !== undefined ? cell.markerLine + 1 : cell.start;
 }
 
-async function runCell(uri?: unknown, line?: unknown) {
-    const t = await resolveTarget(uri, line);
-    if (!t) {
-        return;
-    }
-    const lines = linesOf(t.document);
-    const cells = findCells(lines);
-    await execute(cellCode(lines, cells[cellIndexAt(cells, t.line)]));
+interface Context extends Target {
+    lines: string[];
+    cells: Cell[];
+    /** Index of the cell containing `line`. */
+    cell: number;
 }
 
-async function runCellAndAdvance() {
-    const t = await resolveTarget();
-    if (!t?.editor) {
-        return;
-    }
-    const lines = linesOf(t.document);
-    const cells = findCells(lines);
-    const i = cellIndexAt(cells, t.line);
-    await execute(cellCode(lines, cells[i]));
-    moveCursor(t.editor, i + 1 < cells.length ? firstBodyLine(cells[i + 1]) : t.document.lineCount);
+/**
+ * Wraps a command body: resolves the target, parses the document, and runs the code the body returns
+ * (the body may also return nothing after showing its own message). `after` runs once the code was sent.
+ */
+function command(body: (c: Context) => { code: string; after?: () => void } | undefined) {
+    return async (uri?: unknown, line?: unknown) => {
+        const t = await resolveTarget(uri, line);
+        if (!t) {
+            return;
+        }
+        const lines = linesOf(t.document);
+        const cells = findCells(lines);
+        const r = body({ ...t, lines, cells, cell: cellIndexAt(cells, t.line) });
+        if (r) {
+            await execute(r.code);
+            r.after?.();
+        }
+    };
 }
 
-async function runCellsAbove(uri?: unknown, line?: unknown) {
-    const t = await resolveTarget(uri, line);
-    if (!t) {
-        return;
-    }
-    const lines = linesOf(t.document);
-    const cells = findCells(lines);
-    await execute(rangeCode(lines, 0, cells[cellIndexAt(cells, t.line)].start - 1));
-}
+const runCell = command(c => ({ code: cellCode(c.lines, c.cells[c.cell]) }));
+const runCellsAbove = command(c => ({ code: rangeCode(c.lines, 0, c.cells[c.cell].start - 1) }));
+const runToCursor = command(c => ({ code: rangeCode(c.lines, 0, c.line) }));
+const runFromCursor = command(c => ({ code: rangeCode(c.lines, c.line, c.lines.length - 1) }));
 
-async function runNextCell(uri?: unknown, line?: unknown) {
-    const t = await resolveTarget(uri, line);
-    if (!t) {
-        return;
-    }
-    const lines = linesOf(t.document);
-    const cells = findCells(lines);
-    const next = cellIndexAt(cells, t.line) + 1;
-    if (next >= cells.length) {
+const runCellAndAdvance = command(c => {
+    const { editor, cells, cell } = c;
+    if (!editor) return undefined;
+    return { code: cellCode(c.lines, cells[cell]), after: () => moveCursor(editor, cell + 1 < cells.length ? firstBodyLine(cells[cell + 1]) : c.document.lineCount) };
+});
+
+const runNextCell = command(c => {
+    const next = c.cells[c.cell + 1];
+    if (!next) {
         vscode.window.setStatusBarMessage('Stata: no next cell', 2000);
-        return;
+        return undefined;
     }
-    await execute(cellCode(lines, cells[next]));
-    if (t.editor && t.editor === vscode.window.activeTextEditor) {
-        moveCursor(t.editor, firstBodyLine(cells[next]));
-    }
-}
+    const { editor } = c;
+    return { code: cellCode(c.lines, next), after: () => editor && editor === vscode.window.activeTextEditor && moveCursor(editor, firstBodyLine(next)) };
+});
 
-async function runSection(uri?: unknown, line?: unknown) {
-    const t = await resolveTarget(uri, line);
-    if (!t) {
-        return;
-    }
-    const lines = linesOf(t.document);
-    const sections = findSections(lines);
-    const i = sectionIndexAt(sections, t.line);
+const runSection = command(c => {
+    const sections = findSections(c.lines);
+    const i = sectionIndexAt(sections, c.line);
     if (i < 0) {
         vscode.window.setStatusBarMessage('Stata: cursor is not inside a **# section', 2500);
-        return;
+        return undefined;
     }
-    await execute(sectionCode(lines, sections, i));
-}
-
-async function runToCursor() {
-    const t = await resolveTarget();
-    if (t) {
-        await execute(rangeCode(linesOf(t.document), 0, t.line));
-    }
-}
-
-async function runFromCursor() {
-    const t = await resolveTarget();
-    if (t) {
-        const lines = linesOf(t.document);
-        await execute(rangeCode(lines, t.line, lines.length - 1));
-    }
-}
+    return { code: sectionCode(c.lines, sections, i) };
+});
 
 class StataCellCodeLensProvider implements vscode.CodeLensProvider {
     private readonly changed = new vscode.EventEmitter<void>();
@@ -162,23 +140,21 @@ class StataCellCodeLensProvider implements vscode.CodeLensProvider {
             const lenses: vscode.CodeLens[] = [];
             const uri = document.uri;
 
-            if (hasCellMarkers(lines)) {
-                const cells = findCells(lines);
-                cells.forEach((cell, i) => {
-                    if (cell.markerLine === undefined) {
-                        return;
-                    }
-                    const range = new vscode.Range(cell.markerLine, 0, cell.markerLine, 0);
-                    const args = [uri, cell.markerLine];
-                    lenses.push(new vscode.CodeLens(range, { title: '$(play) Run Cell', command: 'stata.runCurrentCell', arguments: args }));
-                    if (i > 0) {
-                        lenses.push(new vscode.CodeLens(range, { title: 'Run Above', command: 'stata.runCellsAbove', arguments: args }));
-                    }
-                    if (i + 1 < cells.length) {
-                        lenses.push(new vscode.CodeLens(range, { title: 'Run Next Cell', command: 'stata.runNextCell', arguments: args }));
-                    }
-                });
-            }
+            const cells = findCells(lines);
+            cells.forEach((cell, i) => {
+                if (cell.markerLine === undefined) {
+                    return;
+                }
+                const range = new vscode.Range(cell.markerLine, 0, cell.markerLine, 0);
+                const args = [uri, cell.markerLine];
+                lenses.push(new vscode.CodeLens(range, { title: '$(play) Run Cell', command: 'stata.runCurrentCell', arguments: args }));
+                if (i > 0) {
+                    lenses.push(new vscode.CodeLens(range, { title: 'Run Above', command: 'stata.runCellsAbove', arguments: args }));
+                }
+                if (i + 1 < cells.length) {
+                    lenses.push(new vscode.CodeLens(range, { title: 'Run Next Cell', command: 'stata.runNextCell', arguments: args }));
+                }
+            });
 
             const sections = findSections(lines);
             sections.forEach((s, i) => {

@@ -483,7 +483,7 @@ class TestInterruptUnit(_EngineTestCase):
         self.assertEqual(self.breaks, [1])
         self.assertTrue(res.interrupted)
         self.assertIn("--Break--", res.error)
-        self.assertFalse(self.engine.is_running_user_code)
+        self.assertFalse(self.engine._user_run_active)
 
     def test_keyboard_interrupt_becomes_break_error(self):
         def run(code, **kwargs):

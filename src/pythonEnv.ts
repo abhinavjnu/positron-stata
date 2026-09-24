@@ -6,7 +6,7 @@ import { execFile } from 'child_process';
 /** PyStata supports Python 3.9 through 3.13 (it refuses to load on 3.14+). */
 export const MIN_PYTHON_MINOR = 9;
 export const MAX_PYTHON_MINOR = 13;
-export const SUPPORTED_MINORS: readonly number[] = [13, 12, 11, 10, 9];
+const SUPPORTED_MINORS: readonly number[] = [13, 12, 11, 10, 9];
 export const SETUP_PYTHON_VERSION = '3.12';
 export const REQUIRED_PACKAGES = ['numpy', 'pandas'] as const;
 export const OPTIONAL_PACKAGES = ['pyarrow', 'pyreadstat'] as const;
@@ -20,7 +20,7 @@ export interface PythonCandidate {
     source: string;
 }
 
-export interface CandidateOptions {
+interface CandidateOptions {
     platform: NodeJS.Platform;
     env: NodeJS.ProcessEnv;
     exists: (p: string) => boolean;
@@ -53,11 +53,6 @@ export function dataDirectory(platform: NodeJS.Platform, env: NodeJS.ProcessEnv)
     return p.join(homeDir(env), '.local', 'share', 'positron-stata');
 }
 
-/** Location used by earlier versions on every platform (kept so existing environments keep working). */
-export function legacyDataDirectory(platform: NodeJS.Platform, env: NodeJS.ProcessEnv): string | undefined {
-    const home = homeDir(env);
-    return home ? pathApi(platform).join(home, '.local', 'share', 'positron-stata') : undefined;
-}
 
 export function venvPython(venvDir: string, platform: NodeJS.Platform): string {
     const p = pathApi(platform);
@@ -111,10 +106,7 @@ export function enumeratePythonCandidates(opts: CandidateOptions): PythonCandida
 
     if (opts.configured) addIfExists(opts.configured, 'positron-stata.pythonPath setting');
 
-    const dataDir = dataDirectory(platform, env);
-    addIfExists(venvPython(p.join(dataDir, 'venv'), platform), 'Stata helper environment');
-    const legacy = legacyDataDirectory(platform, env);
-    if (legacy) addIfExists(venvPython(p.join(legacy, 'venv'), platform), 'Stata helper environment (legacy location)');
+    addIfExists(venvPython(p.join(dataDirectory(platform, env), 'venv'), platform), 'Stata helper environment');
 
     if (env.VIRTUAL_ENV) {
         const rels = win ? [['Scripts', 'python.exe']] : [['bin', 'python3'], ['bin', 'python']];
@@ -195,7 +187,7 @@ export function enumeratePythonCandidates(opts: CandidateOptions): PythonCandida
 // Probing
 
 /** Prints one line of JSON describing the interpreter. Must stay compatible with old Pythons. */
-export const PROBE_SCRIPT = [
+const PROBE_SCRIPT = [
     'import sys, struct, json, os, site',
     'r = {"executable": sys.executable, "version": "%d.%d.%d" % tuple(sys.version_info[:3]),',
     '     "bits": struct.calcsize("P") * 8, "prefix": sys.prefix, "venv": sys.prefix != getattr(sys, "base_prefix", sys.prefix)}',
@@ -249,11 +241,6 @@ export function parseProbeOutput(stdout: string): ProbeResult {
     }
 }
 
-export function pythonMinor(result: ProbeResult): { major: number; minor: number } | undefined {
-    const m = result.version?.match(/^(\d+)\.(\d+)/);
-    return m ? { major: +m[1], minor: +m[2] } : undefined;
-}
-
 export interface Verdict {
     ok: boolean;
     /** Can host the helper venv (right version and 64-bit), ignoring packages. */
@@ -268,10 +255,10 @@ export function evaluateProbe(result: ProbeResult): Verdict {
     if (result.error) {
         return { ok: false, baseOk: false, problems: [result.error], warnings };
     }
-    const v = pythonMinor(result);
+    const v = result.version?.match(/^(\d+)\.(\d+)/);
     if (!v) {
         problems.push('could not determine the Python version');
-    } else if (v.major !== 3 || v.minor < MIN_PYTHON_MINOR || v.minor > MAX_PYTHON_MINOR) {
+    } else if (v[1] !== '3' || !isSupportedMinor(+v[2])) {
         problems.push(`Python ${result.version} is not supported by PyStata (needs 3.${MIN_PYTHON_MINOR}–3.${MAX_PYTHON_MINOR})`);
     }
     if (result.bits !== 64) {
@@ -288,29 +275,17 @@ export function evaluateProbe(result: ProbeResult): Verdict {
     return { ok: problems.length === 0, baseOk, problems, warnings };
 }
 
-export type ExecFileFn = (
-    file: string,
-    args: string[],
-    options: { timeout: number; windowsHide: boolean; env?: NodeJS.ProcessEnv },
-    callback: (error: Error | null, stdout: string, stderr: string) => void
-) => void;
-
-export function probePython(candidate: PythonCandidate, timeoutMs = 20000, exec: ExecFileFn = execFile as unknown as ExecFileFn): Promise<ProbeResult> {
+export function probePython(candidate: PythonCandidate): Promise<ProbeResult> {
     return new Promise(resolve => {
         // PYTHONHOME/PYTHONPATH from the host would make the probe lie about the interpreter.
         const env = { ...process.env };
         delete env.PYTHONHOME;
         delete env.PYTHONPATH;
-        exec(candidate.path, [...(candidate.args || []), '-c', PROBE_SCRIPT], { timeout: timeoutMs, windowsHide: true, env }, (err, stdout, stderr) => {
+        execFile(candidate.path, [...(candidate.args || []), '-c', PROBE_SCRIPT], { timeout: 20000, windowsHide: true, env }, (err, stdout, stderr) => {
             const parsed = parseProbeOutput(String(stdout || ''));
-            if (!parsed.error) {
-                resolve(parsed);
-            } else if (err) {
-                const detail = String(stderr || '').trim().split(/\r?\n/).slice(-2).join(' ');
-                resolve({ error: `could not run: ${detail || err.message}` });
-            } else {
-                resolve(parsed);
-            }
+            if (!parsed.error || !err) return resolve(parsed);
+            const detail = String(stderr || '').trim().split(/\r?\n/).slice(-2).join(' ');
+            resolve({ error: `could not run: ${detail || err.message}` });
         });
     });
 }
@@ -322,14 +297,8 @@ export function describeCandidate(c: PythonCandidate): string {
 // ---------------------------------------------------------------------------------------------
 // uv
 
-export interface UvAsset {
-    target: string;
-    ext: 'tar.gz' | 'zip';
-    url: string;
-}
-
 /** Official uv release asset for this platform, or undefined if uv ships no build for it. */
-export function uvAsset(platform: NodeJS.Platform, arch: string, musl = false): UvAsset | undefined {
+export function uvAsset(platform: NodeJS.Platform, arch: string, musl = false): { target: string; ext: string; url: string } | undefined {
     const cpu = arch === 'x64' ? 'x86_64' : arch === 'arm64' ? 'aarch64' : undefined;
     if (!cpu) return undefined;
     let target: string;

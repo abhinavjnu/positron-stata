@@ -7,7 +7,6 @@ import os
 import re
 import signal
 import socket
-import sys
 import threading
 from typing import Optional
 
@@ -30,7 +29,7 @@ from .help_handler import StataHelpHandler
 
 class PositronStataKernel(Kernel):
     implementation = "positron_stata"
-    implementation_version = "0.2.0"
+    implementation_version = "0.2.1"
     language = "stata"
     language_version = os.environ.get("STATA_VERSION", "19")
     language_info = {
@@ -166,12 +165,12 @@ class PositronStataKernel(Kernel):
                 )
 
         # If the dataset, e()/r() results or frames changed, refresh Variables pane
-        if res.dataset_changed or getattr(res, "results_changed", False):
+        if res.dataset_changed or res.results_changed:
             self.variables_handler.send_refresh_event()
 
         # If user ran `browse` or `view`, open Data Explorer tab immediately
         if res.request_open_data_explorer:
-            self.open_data_explorer_for_current_dataset(getattr(res, "browse_request", None))
+            self.open_data_explorer_for_current_dataset(res.browse_request)
 
         self.ui_handler.poll_working_directory()
 
@@ -218,7 +217,7 @@ class PositronStataKernel(Kernel):
         """Convert in-memory Stata data to DataFrame and register with Positron Data Explorer.
 
         `request` (a BrowseRequest from `browse varlist if in`) limits what is shown."""
-        df = self.engine.get_dataframe(request) if request is not None else self.engine.get_dataframe()
+        df = self.engine.get_dataframe(request)
         subset = request is not None and (bool(request.variables) or request.obs is not None)
         if df is None or len(df.columns) == 0 or (df.empty and not subset):
             self._send_stderr("No data in memory to browse.\n")

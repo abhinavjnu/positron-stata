@@ -45,7 +45,7 @@ test('candidate order: setting, helper venv, VIRTUAL_ENV, Positron, versioned, g
         '/pos/python', '/usr/bin/python3.11', '/usr/local/bin/python3']);
 });
 
-test('Windows: new LOCALAPPDATA helper venv, legacy venv, py launcher', () => {
+test('Windows: LOCALAPPDATA helper venv, py launcher', () => {
     const env = { USERPROFILE: 'C:\\Users\\u', LOCALAPPDATA: 'C:\\Users\\u\\AppData\\Local', SystemRoot: 'C:\\Windows', PATH: '' };
     assert.equal(dataDirectory('win32', env), 'C:\\Users\\u\\AppData\\Local\\positron-stata');
     const c = enumeratePythonCandidates({
@@ -54,8 +54,8 @@ test('Windows: new LOCALAPPDATA helper venv, legacy venv, py launcher', () => {
             'C:\\Users\\u\\.local\\share\\positron-stata\\venv\\Scripts\\python.exe', 'C:\\Windows\\py.exe'])
     });
     assert.equal(norm(c[0].path), norm('C:\\Users\\u\\AppData\\Local\\positron-stata\\venv\\Scripts\\python.exe'));
-    assert.equal(norm(c[1].path), norm('C:\\Users\\u\\.local\\share\\positron-stata\\venv\\Scripts\\python.exe'));
-    assert.deepEqual(c[2].args, ['-3.13']);
+    assert.equal(c.length, 6);
+    assert.deepEqual(c[1].args, ['-3.13']);
     assert.deepEqual(c.at(-1)!.args, ['-3.9']);
     assert.equal(dataDirectory('linux', { HOME: '/h', POSITRON_STATA_DATA_DIR: '/tmp/x' }), '/tmp/x');
     assert.equal(venvPython('/d/venv', 'linux'), '/d/venv/bin/python');

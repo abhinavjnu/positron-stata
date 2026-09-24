@@ -2,7 +2,7 @@
   "name": "positron-stata",
   "displayName": "Stata Support for Positron",
   "description": "First-class Stata support for Positron IDE with native Variables, Data Explorer, Plots, and .dta support.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "abhinavjnu",
   "license": "MIT",
   "icon": "icon.png",
@@ -133,11 +133,7 @@
       }
     ],
     "commands": [
-      {
-        "command": "stata.runLineOrSelection",
-        "title": "Execute Line or Selection in Stata",
-        "category": "Stata"
-      },
+
       {
         "command": "stata.doFile",
         "title": "Do File (Execute Current File in Stata)",
