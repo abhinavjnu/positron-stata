@@ -156,12 +156,11 @@ export class StataRuntimeManager implements positron.LanguageRuntimeManager {
 
     async validateSession(sessionId: string): Promise<boolean> {
         try {
-            const supervisorExt = vscode.extensions.getExtension('positron.positron-supervisor');
-            if (supervisorExt && supervisorExt.isActive) {
-                const supervisorApi = supervisorExt.exports as SupervisorApi;
-                if (supervisorApi && typeof supervisorApi.validateSession === 'function') {
-                    return await supervisorApi.validateSession(sessionId);
-                }
+            // No extensionDependencies (Open VSX can't resolve built-ins), so the supervisor
+            // may not be active yet on a window reload; activate it rather than skip validation.
+            const supervisorApi = await this.supervisor();
+            if (typeof supervisorApi.validateSession === 'function') {
+                return await supervisorApi.validateSession(sessionId);
             }
         } catch {
             // fallback
