@@ -122,6 +122,18 @@ class TestLiveFeatures(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("r(111);", msg)
 
+    def test_help_text_for_the_help_pane(self):
+        # The Help pane shows what `help <topic>` prints in console Stata.
+        self.engine.execute("summarize price")
+        res = self.engine.execute("help regress", interactive=False)
+        self.assertIsNone(res.error, res.error)
+        self.assertIn("regress", res.stdout.lower())
+        self.assertGreater(len(res.stdout.strip()), 200, res.stdout[:500])
+        # Rendering help must not disturb the user's r() results.
+        self.assertEqual(self.engine.evaluate_expression("%9.2f r(mean)"), (True, "6165.26"))
+        res = self.engine.execute("help nosuchtopic_xyz", interactive=False)
+        self.assertTrue(res.stdout.strip() or res.error)
+
 
 PAUSE_SCRIPT = textwrap.dedent(
     """
