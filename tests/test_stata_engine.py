@@ -13,8 +13,14 @@ import unittest
 repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(repo_root, "kernel"))
 
-from positron_stata_kernel.stata_engine import StataEngine
+from positron_stata_kernel.stata_engine import PYSTATA_MAX_PYTHON, StataEngine
 
+STATA_HOME = os.environ.get("STATA_HOME", "/usr/local/stata19")
+HAVE_STATA = (os.path.isdir(os.path.join(STATA_HOME, "utilities", "pystata"))
+              and sys.version_info[:2] <= PYSTATA_MAX_PYTHON)
+
+
+@unittest.skipUnless(HAVE_STATA, f"needs Stata at {STATA_HOME} and a PyStata-compatible Python")
 class TestStataEngineEndToEnd(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

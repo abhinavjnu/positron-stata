@@ -16,6 +16,9 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from .completeness import delimiter_state, parse_delimit, strip_strings_and_comments
 
+# Newest Python whose C API Stata's PyStata/SFI bridge supports; newer ones fail in config.init.
+PYSTATA_MAX_PYTHON = (3, 13)
+
 # Global used to read back `_rc` after `capture graph drop Graph`.
 _RC_GLOBAL = "positron_stata_rc"
 
@@ -357,10 +360,12 @@ class StataEngine:
         if self._initialized:
             return
 
-        if sys.version_info >= (3, 14):
+        if sys.version_info[:2] > PYSTATA_MAX_PYTHON:
+            supported = ".".join(map(str, PYSTATA_MAX_PYTHON))
             raise RuntimeError(
                 f"Python {sys.version_info[0]}.{sys.version_info[1]}.{sys.version_info[2]} is not supported by Stata. "
-                "Stata's PyStata C-bridge requires Python <= 3.13. Please configure 'positron-stata.pythonPath' to point to Python 3.9-3.13."
+                f"Stata's PyStata C-bridge requires Python <= {supported}. "
+                f"Please configure 'positron-stata.pythonPath' to point to Python 3.9-{supported}."
             )
 
         utilities_path = os.path.join(self.stata_home, "utilities")

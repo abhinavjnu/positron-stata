@@ -230,8 +230,10 @@ class _EngineTestCase(unittest.TestCase):
         self._orig_modules = {k: sys.modules.get(k) for k in self._ISOLATED}
         self.stata, self.sfi = install_fakes()
         sys.modules.pop("positron_stata_kernel.stata_engine", None)
-        from positron_stata_kernel.stata_engine import StataEngine
-        self.engine = StataEngine(stata_home=tempfile.gettempdir(), edition="mp")
+        from positron_stata_kernel import stata_engine
+        # The stand-in PyStata works on any Python; only the real C bridge is version-bound.
+        stata_engine.PYSTATA_MAX_PYTHON = tuple(sys.version_info[:2])
+        self.engine = stata_engine.StataEngine(stata_home=tempfile.gettempdir(), edition="mp")
 
     def tearDown(self):
         for k, v in self._orig_modules.items():
@@ -643,21 +645,43 @@ class TestAgainstGoldenFixture(_EngineTestCase):
         self.assertTrue(self.golden["r_results_preserved"]["display_r_mean"].startswith("6165.25"))
 
 
+class TestPythonVersionGuard(_EngineTestCase):
+    def test_unsupported_python_is_rejected_before_pystata_loads(self):
+        from positron_stata_kernel import stata_engine
+        stata_engine.PYSTATA_MAX_PYTHON = (3, 0)
+        with self.assertRaisesRegex(RuntimeError, r"requires Python <= 3\.0.*positron-stata\.pythonPath"):
+            self.engine.execute("display 1")
+        self.assertEqual(self.stata.commands, [])
+
+
+try:
+    from positron_stata_kernel import _positron_loader  # noqa: F401
+    from positron.help_comm import ShowHelpKind  # noqa: F401
+    HAVE_POSITRON = True
+except Exception:  # pragma: no cover - depends on a local Positron install
+    HAVE_POSITRON = False
+
+
+@unittest.skipUnless(HAVE_POSITRON, "needs Positron's bundled `positron` package")
 class TestStataHelpHandler(unittest.TestCase):
-    def test_help_handler_http_server_and_show_help(self):
-        import urllib.request
+    def setUp(self):
+        import threading
         from positron_stata_kernel.help_handler import StataHelpHandler
+
+        test = self
+        self.calls = []
 
         class MockEngine:
             def execute(self, cmd, **_kwargs):
+                test.calls.append((cmd, threading.current_thread()))
+
                 class MockRes:
                     stdout = "[R] regress -- Linear regression syntax"
                     error = None
                 return MockRes()
 
         class MockKernel:
-            def __init__(self):
-                self.engine = MockEngine()
+            engine = MockEngine()
 
         class MockComm:
             def __init__(self):
@@ -666,29 +690,46 @@ class TestStataHelpHandler(unittest.TestCase):
             def send_event(self, name, payload):
                 self.events.append((name, payload))
 
-        kernel = MockKernel()
-        handler = StataHelpHandler(kernel)
-        self.assertGreater(handler._port, 0)
+        os.environ["STATA_VERSION"], os.environ["STATA_EDITION"] = "18", "se"
+        self.handler = StataHelpHandler(MockKernel())
+        self.handler._comm = MockComm()
+        self.addCleanup(self.handler.shutdown)
 
-        # Test HTTP GET
-        url = f"http://127.0.0.1:{handler._port}/help?topic=regress"
-        with urllib.request.urlopen(url) as resp:
-            self.assertEqual(resp.status, 200)
-            content = resp.read().decode("utf-8")
-            self.assertIn("Stata Help: <code>regress</code>", content)
-            self.assertIn("Linear regression syntax", content)
+    def get(self, url):
+        import urllib.error
+        import urllib.request
+        try:
+            with urllib.request.urlopen(url) as resp:
+                return resp.status, resp.read().decode("utf-8")
+        except urllib.error.HTTPError as e:
+            return e.code, e.read().decode("utf-8")
 
-        # Test show_help with mock comm
-        handler._comm = MockComm()
-        handler.show_help("regress")
-        self.assertEqual(len(handler._comm.events), 1)
-        name, payload = handler._comm.events[0]
+    def test_help_runs_stata_on_the_calling_thread_and_serves_the_cached_page(self):
+        import threading
+        self.handler.show_help("graph twoway")
+        self.assertEqual(self.calls, [("help graph twoway", threading.current_thread())])
+        name, payload = self.handler._comm.events[0]
         self.assertEqual(name, "show_help")
-        self.assertEqual(payload["content"], url)
         self.assertEqual(str(payload["kind"]), "ShowHelpKind.Url")
         self.assertTrue(payload["focus"])
+        url = payload["content"]
+        self.assertTrue(url.startswith(f"http://127.0.0.1:{self.handler._port}/help?topic=graph%20twoway&page="))
 
-        handler.shutdown()
+        # The Help pane may fetch (or re-fetch on back/forward) while user code runs:
+        # serving must never call Stata from the HTTP thread.
+        for _ in range(2):
+            status, body = self.get(url)
+            self.assertEqual(status, 200)
+            self.assertIn("Stata Help: <code>graph twoway</code>", body)
+            self.assertIn("Linear regression syntax", body)
+            self.assertIn("Stata 18 SE", body)
+        self.assertEqual(len(self.calls), 1)
+
+    def test_unknown_page_is_not_rendered_from_stata(self):
+        status, body = self.get(f"http://127.0.0.1:{self.handler._port}/help?topic=regress")
+        self.assertEqual(status, 404)
+        self.assertIn("no longer available", body)
+        self.assertEqual(self.calls, [])
 
 
 if __name__ == "__main__":
