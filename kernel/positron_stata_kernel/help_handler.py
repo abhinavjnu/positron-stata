@@ -7,8 +7,11 @@ via an embedded localhost HTTP server.
 import html
 import http.server
 import logging
+import os
+import secrets
 import threading
 import urllib.parse
+from collections import OrderedDict
 from typing import Optional
 
 from . import _positron_loader
@@ -23,10 +26,20 @@ from positron.help_comm import (
 
 logger = logging.getLogger(__name__)
 
+# Rendered pages kept for the Help pane's back/forward history.
+_MAX_CACHED_PAGES = 64
+
+
+def _stata_label() -> str:
+    version = os.environ.get("STATA_VERSION", "").strip()
+    edition = os.environ.get("STATA_EDITION", "").strip().upper()
+    return " ".join(p for p in ("Stata", version, edition) if p)
+
 
 def _render_help_html(topic: str, content: str) -> str:
     escaped_topic = html.escape(topic)
     escaped_content = html.escape(content)
+    escaped_label = html.escape(_stata_label())
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -108,7 +121,7 @@ def _render_help_html(topic: str, content: str) -> str:
 <body>
     <div class="header">
         <h1>Stata Help: <code>{escaped_topic}</code></h1>
-        <span class="badge">Stata 19 MP</span>
+        <span class="badge">{escaped_label}</span>
     </div>
     <pre>{escaped_content}</pre>
     <script>
@@ -129,24 +142,20 @@ class _HelpHTTPServer(http.server.ThreadingHTTPServer):
 
 
 class _HelpHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
+    # Only serves pages rendered on the kernel thread: this runs on a server thread, and Stata
+    # must not be called from here while (or even between) the kernel runs user code.
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
-        params = urllib.parse.parse_qs(parsed.query)
-        topic = params.get("topic", [""])[0]
-        if not topic and parsed.path.startswith("/help/"):
-            topic = parsed.path[len("/help/"):]
-
-        if not topic:
-            topic = "help"
-
-        try:
-            res = self.server.help_handler.kernel.engine.execute(f"help {topic}", interactive=False)
-            content = res.stdout or res.error or f"No Stata help found for topic: {topic}"
-        except Exception as e:
-            content = f"Error retrieving help for '{topic}': {e}"
-
-        html_body = _render_help_html(topic, content).encode("utf-8")
-        self.send_response(200)
+        page = urllib.parse.parse_qs(parsed.query).get("page", [""])[0]
+        body = self.server.help_handler.cached_page(page)
+        if body is None:
+            self.send_response(404)
+            html_body = _render_help_html(
+                "unavailable", "This help page is no longer available. Run `help <topic>` again."
+            ).encode("utf-8")
+        else:
+            self.send_response(200)
+            html_body = body
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(html_body)))
         self.end_headers()
@@ -163,6 +172,8 @@ class StataHelpHandler:
         self._comm: Optional[PositronComm] = None
         self._server: Optional[_HelpHTTPServer] = None
         self._port: int = 0
+        self._pages: "OrderedDict[str, bytes]" = OrderedDict()
+        self._pages_lock = threading.Lock()
         self._start_server()
 
     def _start_server(self):
@@ -190,6 +201,27 @@ class StataHelpHandler:
         else:
             logger.warning("Unhandled help request: %s", request)
 
+    def render_help(self, topic: str) -> bytes:
+        """Run `help topic` in Stata. Call on the kernel thread only."""
+        try:
+            res = self.kernel.engine.execute(f"help {topic}", interactive=False)
+            content = res.stdout or res.error or f"No Stata help found for topic: {topic}"
+        except Exception as e:
+            content = f"Error retrieving help for '{topic}': {e}"
+        return _render_help_html(topic, content).encode("utf-8")
+
+    def cached_page(self, page: str) -> Optional[bytes]:
+        with self._pages_lock:
+            return self._pages.get(page)
+
+    def _cache_page(self, body: bytes) -> str:
+        page = secrets.token_urlsafe(8)
+        with self._pages_lock:
+            self._pages[page] = body
+            while len(self._pages) > _MAX_CACHED_PAGES:
+                self._pages.popitem(last=False)
+        return page
+
     def show_help(self, topic: str):
         if not topic:
             return
@@ -197,7 +229,8 @@ class StataHelpHandler:
             logger.warning("positron.help comm is not open; cannot send show_help event")
             return
         try:
-            url = f"http://127.0.0.1:{self._port}/help?topic={urllib.parse.quote(topic)}"
+            page = self._cache_page(self.render_help(topic))
+            url = f"http://127.0.0.1:{self._port}/help?topic={urllib.parse.quote(topic)}&page={page}"
             event = ShowHelpParams(
                 content=url,
                 kind=ShowHelpKind.Url,

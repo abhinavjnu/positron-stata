@@ -135,9 +135,10 @@ class PositronStataKernel(Kernel):
         help_code = code_trimmed
         if self.engine.semicolon_delimiter:
             help_code = help_code.rstrip("; \t")
-        help_m = re.match(r"^(?:help|h)(?:\s+([a-zA-Z0-9_\.]+))?\s*$", help_code, re.IGNORECASE)
+        # Multi-word topics such as `help graph twoway` or `help regress postestimation`.
+        help_m = re.match(r"^(?:help|h)(?:\s+([A-Za-z0-9_.#() -]+?))?\s*$", help_code, re.IGNORECASE)
         if help_m and self.help_handler._comm is not None:
-            topic = help_m.group(1) or "help"
+            topic = " ".join((help_m.group(1) or "help").split())
             self.help_handler.show_help(topic)
             if not silent:
                 self._send_stdout(f"Displaying Stata help for '{topic}' in the Help pane.\n")

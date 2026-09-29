@@ -283,6 +283,22 @@ class TestKernelMethods(unittest.TestCase):
         self.K.do_execute(self.k, "help regress;", False)
         self.assertEqual(shown, ["regress"])
 
+    def test_help_interception_accepts_multi_word_topics(self):
+        shown = []
+        self.k.help_handler = types.SimpleNamespace(_comm=object(), show_help=shown.append)
+        for code in ("help graph twoway", "h   regress   postestimation", "help"):
+            reply = self.K.do_execute(self.k, code, False)
+            self.assertEqual(reply["status"], "ok")
+        self.assertEqual(shown, ["graph twoway", "regress postestimation", "help"])
+
+    def test_help_with_other_code_runs_in_stata(self):
+        ran = []
+        self.k.help_handler = types.SimpleNamespace(_comm=object(), show_help=lambda t: self.fail(t))
+        from positron_stata_kernel.stata_engine import ExecutionResult
+        self.engine.execute = lambda code, **_kw: ran.append(code) or ExecutionResult(stdout="")
+        self.K.do_execute(self.k, "help regress\nsummarize", False)
+        self.assertEqual(ran, ["help regress\nsummarize"])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
