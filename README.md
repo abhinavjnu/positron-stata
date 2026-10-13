@@ -8,7 +8,7 @@
 [![Open VSX](https://img.shields.io/badge/Open%20VSX-positron--stata-purple)](https://open-vsx.org/extension/abhinavjnu/positron-stata)
 [![GitHub Release](https://img.shields.io/github/v/release/abhinavjnu/positron-stata?color=green)](https://github.com/abhinavjnu/positron-stata/releases)
 
-Use **your own licensed Stata** (17 or newer: BE, SE, MP or StataNow) inside **[Positron](https://positron.posit.co)**, the free data science IDE from Posit. Keep your do-files, ado-files and `profile.do`. Get a modern editor, a Data Explorer, a Plots pane and Quarto reports.
+Use **your own licensed Stata** (17 or newer: BE, SE, MP or StataNow) or the **built-in license-free engine** (`open-stata-core`) inside **[Positron](https://positron.posit.co)**, the free data science IDE from Posit. Keep your do-files, ado-files and `profile.do`. Get a modern editor, a Data Explorer, a Plots pane and Quarto reports without being locked behind an institutional license.
 
 ## Quick start
 
@@ -46,7 +46,7 @@ Use **your own licensed Stata** (17 or newer: BE, SE, MP or StataNow) inside **[
 
 Run **Stata: Diagnose Setup** from the Command Palette. It shows what was found and why anything was rejected, with a **Copy Report** button for issues.
 
-- **Stata not found:** set `positron-stata.stataHome` to your Stata folder (e.g. `/usr/local/stata19`, `/Applications/StataNow`, `C:\Program Files\StataNow19`).
+- **Stata not found / No license:** Positron Stata automatically detects when no proprietary Stata installation is present and runs seamlessly using the built-in in-process OpenStata engine (you can also force OpenStata by setting `POSITRON_STATA_BACKEND=open`).
 - **Own Python instead of the helper:** any 64-bit Python 3.9–3.13 with `numpy pandas pyarrow` works. Pick it with **Stata: Choose Python Interpreter…**.
 - **Undo setup:** delete `~/.local/share/positron-stata` (Linux/macOS) or `%LOCALAPPDATA%\positron-stata` (Windows).
 

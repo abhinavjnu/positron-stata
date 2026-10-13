@@ -1,8 +1,8 @@
 {
   "name": "positron-stata",
   "displayName": "Stata Support for Positron",
-  "description": "First-class Stata support for Positron IDE with native Variables, Data Explorer, Plots, and .dta support.",
-  "version": "0.2.2",
+  "description": "First-class Stata support for Positron IDE with native Variables, Data Explorer, Plots, and built-in OpenStata engine.",
+  "version": "0.3.0",
   "publisher": "abhinavjnu",
   "license": "MIT",
   "icon": "icon.png",

@@ -360,6 +360,23 @@ class StataEngine:
         if self._initialized:
             return
 
+        target_edition = (self.edition or "mp").lower()
+        if target_edition == "open" or os.environ.get("POSITRON_STATA_BACKEND") == "open":
+            try:
+                from .open_stata_adapter import OpenStataAdapter
+                adapter = OpenStataAdapter()
+                self._stata = adapter.stata
+                self._sfi = adapter.sfi
+                self._stlib = adapter.stlib
+                self._config = adapter.config
+                if hasattr(self._config, "stoutputf") and self._config.stoutputf is None:
+                    self._config.stoutputf = self._output
+                self.edition = "open"
+                self._initialized = True
+                return
+            except Exception as e:
+                raise RuntimeError(f"Failed to initialize OpenStata adapter: {e}")
+
         if sys.version_info[:2] > PYSTATA_MAX_PYTHON:
             supported = ".".join(map(str, PYSTATA_MAX_PYTHON))
             raise RuntimeError(
@@ -372,7 +389,6 @@ class StataEngine:
         if utilities_path not in sys.path:
             sys.path.insert(0, utilities_path)
 
-        target_edition = (self.edition or "mp").lower()
         if target_edition not in ("mp", "se", "be"):
             target_edition = "mp"
         candidate_editions = [target_edition, *(ed for ed in ("mp", "se", "be") if ed != target_edition)]
@@ -405,6 +421,21 @@ class StataEngine:
                 return
             except Exception as e:
                 last_error = e
+
+        try:
+            from .open_stata_adapter import OpenStataAdapter
+            adapter = OpenStataAdapter()
+            self._stata = adapter.stata
+            self._sfi = adapter.sfi
+            self._stlib = adapter.stlib
+            self._config = adapter.config
+            if hasattr(self._config, "stoutputf") and self._config.stoutputf is None:
+                self._config.stoutputf = self._output
+            self.edition = "open"
+            self._initialized = True
+            return
+        except Exception:
+            pass
 
         raise RuntimeError(
             f"Failed to initialize PyStata from {self.stata_home} (editions tried: {candidate_editions}): {last_error}\n"
