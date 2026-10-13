@@ -39,6 +39,9 @@ def build_vsix():
   <Default Extension=".md" ContentType="text/markdown"/>
   <Default Extension=".png" ContentType="image/png"/>
   <Default Extension=".py" ContentType="text/x-python"/>
+  <Default Extension=".so" ContentType="application/octet-stream"/>
+  <Default Extension=".dylib" ContentType="application/octet-stream"/>
+  <Default Extension=".dll" ContentType="application/octet-stream"/>
   <Default Extension=".svg" ContentType="image/svg+xml"/>
   <Default Extension=".txt" ContentType="text/plain"/>
   <Default Extension=".vsixmanifest" ContentType="text/xml"/>
@@ -103,6 +106,15 @@ def build_vsix():
         for file in sorted(os.listdir(walkthrough_dir)):
             if file.endswith((".md", ".png", ".svg")):
                 files_to_include.append(f"walkthrough/{file}")
+
+    # Include native precompiled libraries
+    bin_dir = os.path.join(base_dir, "bin")
+    if os.path.isdir(bin_dir):
+        for root, dirs, files in os.walk(bin_dir):
+            for file in files:
+                if file.endswith((".so", ".dylib", ".dll")):
+                    rel = os.path.relpath(os.path.join(root, file), base_dir)
+                    files_to_include.append(rel)
 
     # Include kernel directory recursively
     kernel_dir = os.path.join(base_dir, "kernel")
