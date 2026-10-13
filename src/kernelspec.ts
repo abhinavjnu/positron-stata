@@ -29,21 +29,25 @@ export function buildKernelEnv(o: KernelEnvOptions): Record<string, string> {
     const prepend = (value: string, existing: string | undefined) =>
         !existing ? value : existing.split(delimiter).includes(value) ? existing : `${value}${delimiter}${existing}`;
 
+    const isOpen = inst.edition === 'open';
     const env: Record<string, string> = {
         PYTHONPATH: o.standalone ? o.kernelDir : prepend(o.kernelDir, baseEnv.PYTHONPATH),
-        POSITRON_STATA_ENGINE: 'stata',
+        POSITRON_STATA_ENGINE: isOpen ? 'open' : 'stata',
         STATA_HOME: inst.homeDir,
         STATA_EDITION: inst.edition,
         STATA_VERSION: inst.version,
         POSITRON_STATA_VALUE_LABELS: o.valueLabels ? '1' : '0'
     };
-    if (!o.standalone) {
+    if (isOpen) {
+        env.POSITRON_STATA_BACKEND = 'open';
+    }
+    if (!o.standalone && inst.homeDir) {
         env.PATH = prepend(inst.homeDir, baseEnv.PATH ?? baseEnv.Path);
     }
     if (o.positronPythonFiles) {
         env.POSITRON_PYTHON_FILES = o.positronPythonFiles;
     }
-    if (platform === 'linux') {
+    if (platform === 'linux' && inst.homeDir) {
         env.LD_LIBRARY_PATH = o.standalone ? inst.homeDir : prepend(inst.homeDir, baseEnv.LD_LIBRARY_PATH);
     }
     return env;
@@ -61,6 +65,9 @@ export interface KernelSpecJson {
 
 /** "Stata 19 MP" / "StataNow 19 SE" — short enough for Quarto/Jupyter kernel pickers. */
 export function kernelDisplayName(inst: StataInstallation): string {
+    if (inst.edition === 'open') {
+        return 'OpenStata (Built-in)';
+    }
     return `${inst.isStataNow ? 'StataNow' : 'Stata'} ${inst.version} ${inst.edition.toUpperCase()}`;
 }
 

@@ -1,8 +1,10 @@
 import * as vscode from 'vscode';
 import * as positron from 'positron';
 import * as fs from 'fs';
-import { StataInstallation, resolvePythonExecutable } from './discovery';
+import { StataInstallation, resolvePythonExecutable, getOpenStataInstallation, runtimeIdFor } from './discovery';
 import { StataEnvironment, findInstallations, getStataEnvironment } from './setup';
+
+export { runtimeIdFor };
 
 interface SupervisorApi {
     createSession(
@@ -29,10 +31,6 @@ export function getPythonExecutable(): string {
         listDir: fs.readdirSync,
         configured: vscode.workspace.getConfiguration('positron-stata').get<string>('pythonPath')
     });
-}
-
-export function runtimeIdFor(inst: StataInstallation): string {
-    return `stata-${inst.version}-${inst.edition}-official`;
 }
 
 async function workspaceHasStataFiles(): Promise<boolean> {
@@ -84,6 +82,7 @@ export class StataRuntimeManager implements positron.LanguageRuntimeManager {
         inst: StataInstallation,
         startupBehavior: positron.LanguageRuntimeStartupBehavior = positron.LanguageRuntimeStartupBehavior.Implicit
     ): positron.LanguageRuntimeMetadata {
+        const isOpen = inst.edition === 'open';
         return {
             runtimeId: runtimeIdFor(inst),
             runtimeName: inst.displayName,
@@ -93,13 +92,13 @@ export class StataRuntimeManager implements positron.LanguageRuntimeManager {
             languageName: 'Stata',
             languageId: 'stata',
             languageVersion: inst.version,
-            runtimePath: inst.executable,
+            runtimePath: inst.executable || (isOpen ? 'built-in' : ''),
             base64EncodedIconSvg: undefined,
             startupBehavior: startupBehavior,
             sessionLocation: positron.LanguageRuntimeSessionLocation.Workspace,
             cacheable: false,
             extraRuntimeData: {
-                engine: 'stata',
+                engine: isOpen ? 'open' : 'stata',
                 installation: inst,
                 // Rebuilt in createSession with a verified interpreter and current settings.
                 kernelSpec: this.env.buildKernelSpec(inst, getPythonExecutable())
@@ -109,12 +108,22 @@ export class StataRuntimeManager implements positron.LanguageRuntimeManager {
 
     async *discoverAllRuntimes(): AsyncGenerator<positron.LanguageRuntimeMetadata> {
         try {
-            for (const inst of findInstallations()) {
+            const installs = findInstallations();
+            for (const inst of installs) {
                 const metadata = this.buildRuntimeMetadata(inst);
                 this._discoveredRuntimes.set(metadata.runtimeId, metadata);
                 this._discoveredRuntimeCount++;
                 this._discoverEmitter.fire(metadata);
                 yield metadata;
+            }
+            // Always offer the built-in OpenStata engine so non-Stata devices have a first-class Stata runtime
+            const openInst = getOpenStataInstallation();
+            const openMeta = this.buildRuntimeMetadata(openInst);
+            if (!this._discoveredRuntimes.has(openMeta.runtimeId)) {
+                this._discoveredRuntimes.set(openMeta.runtimeId, openMeta);
+                this._discoveredRuntimeCount++;
+                this._discoverEmitter.fire(openMeta);
+                yield openMeta;
             }
         } finally {
             this._discoveryComplete = true;
@@ -131,6 +140,12 @@ export class StataRuntimeManager implements positron.LanguageRuntimeManager {
                 this._discoverEmitter.fire(metadata);
             }
         }
+        const openInst = getOpenStataInstallation();
+        const openMeta = this.buildRuntimeMetadata(openInst);
+        if (!this._discoveredRuntimes.has(openMeta.runtimeId)) {
+            this._discoveredRuntimes.set(openMeta.runtimeId, openMeta);
+            this._discoverEmitter.fire(openMeta);
+        }
     }
 
     // `Immediate` starts a session as soon as Positron sees the runtime, so it is
@@ -140,16 +155,18 @@ export class StataRuntimeManager implements positron.LanguageRuntimeManager {
             return undefined;
         }
         const [preferred] = findInstallations();
-        return preferred
-            ? this.buildRuntimeMetadata(preferred, positron.LanguageRuntimeStartupBehavior.Immediate)
-            : undefined;
+        const target = preferred ?? getOpenStataInstallation();
+        return this.buildRuntimeMetadata(target, positron.LanguageRuntimeStartupBehavior.Immediate);
     }
 
     /** Stored metadata from an older session/extension version is refreshed from current discovery. */
     async validateMetadata(metadata: positron.LanguageRuntimeMetadata): Promise<positron.LanguageRuntimeMetadata> {
+        if (metadata.runtimeId === 'stata-open-builtin') {
+            return this.buildRuntimeMetadata(getOpenStataInstallation(), metadata.startupBehavior);
+        }
         const inst = findInstallations().find(i => runtimeIdFor(i) === metadata.runtimeId);
         if (!inst) {
-            throw new Error(`${metadata.runtimeName} is no longer installed. Set positron-stata.stataHome if Stata moved.`);
+            return this.buildRuntimeMetadata(getOpenStataInstallation(), metadata.startupBehavior);
         }
         return this.buildRuntimeMetadata(inst, metadata.startupBehavior);
     }
@@ -190,10 +207,16 @@ export class StataRuntimeManager implements positron.LanguageRuntimeManager {
     ): Promise<positron.LanguageRuntimeSession> {
         const supervisorApi = await this.supervisor();
         const extraData = runtimeMetadata.extraRuntimeData || {};
-        const inst: StataInstallation | undefined =
+        let inst: StataInstallation | undefined =
             extraData.installation ?? findInstallations().find(i => runtimeIdFor(i) === runtimeMetadata.runtimeId);
+        if (!inst && runtimeMetadata.runtimeId === 'stata-open-builtin') {
+            inst = getOpenStataInstallation();
+        }
+        if (!inst) {
+            inst = getOpenStataInstallation();
+        }
 
-        if (inst && inst.hasPyStata === false) {
+        if (inst && inst.edition !== 'open' && inst.hasPyStata === false) {
             throw new Error(
                 `PyStata was not found in ${inst.homeDir}/utilities. Positron needs Stata 17 or newer; ` +
                 'if Stata is installed elsewhere, set positron-stata.stataHome.'

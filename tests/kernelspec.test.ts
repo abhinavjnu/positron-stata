@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { describeInstallation } from '../src/discovery.ts';
+import { describeInstallation, getOpenStataInstallation } from '../src/discovery.ts';
 import { buildKernelEnv, buildKernelSpec, jupyterDataDir, kernelDisplayName, kernelspecOwnership, provisionKernelspec } from '../src/kernelspec.ts';
 
 const inst = describeInstallation('/usr/local/stata19', '/usr/local/stata19/stata-mp', undefined, ['isstata.195']);
@@ -56,4 +56,15 @@ test('provisioning writes, skips unchanged, replaces legacy, never touches forei
     assert.equal(provisionKernelspec(dir, spec).status, 'skipped');
     assert.equal(fs.readFileSync(file, 'utf8'), foreign);
     fs.rmSync(dir, { recursive: true });
+});
+
+test('OpenStata kernel env and display name', () => {
+    const openInst = getOpenStataInstallation();
+    assert.equal(kernelDisplayName(openInst), 'OpenStata (Built-in)');
+    const env = buildKernelEnv({ inst: openInst, kernelDir: '/ext/kernel', platform: 'linux', baseEnv: {}, valueLabels: true });
+    assert.equal(env.POSITRON_STATA_ENGINE, 'open');
+    assert.equal(env.POSITRON_STATA_BACKEND, 'open');
+    assert.equal(env.STATA_EDITION, 'open');
+    assert.equal(env.PATH, undefined);
+    assert.equal(env.LD_LIBRARY_PATH, undefined);
 });

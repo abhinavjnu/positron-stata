@@ -1,7 +1,7 @@
 import * as path from 'path';
 import { enumeratePythonCandidates } from './pythonEnv';
 
-export type StataEdition = 'mp' | 'se' | 'be';
+export type StataEdition = 'mp' | 'se' | 'be' | 'open';
 
 export interface StataInstallation {
     homeDir: string;
@@ -18,6 +18,29 @@ export interface StataInstallation {
     isStataNow?: boolean;
     /** Whether `<home>/utilities/pystata` exists (Stata 17+). Undefined if it was not checked. */
     hasPyStata?: boolean;
+}
+
+export function getOpenStataInstallation(): StataInstallation {
+    return {
+        homeDir: '',
+        executable: '',
+        version: '19',
+        edition: 'open',
+        displayName: 'OpenStata (Built-in)',
+        shortName: 'OpenStata',
+        source: 'Built-in (open-stata-core)',
+        fullVersion: '19.5',
+        versionSource: 'default',
+        isStataNow: false,
+        hasPyStata: true
+    };
+}
+
+export function runtimeIdFor(inst: StataInstallation): string {
+    if (inst.edition === 'open') {
+        return 'stata-open-builtin';
+    }
+    return `stata-${inst.version}-${inst.edition}-official`;
 }
 
 export interface DiscoveryOptions {
@@ -37,7 +60,7 @@ export interface PythonResolveOptions {
     configured?: string;
 }
 
-const EDITIONS: readonly StataEdition[] = ['mp', 'se', 'be'];
+const EDITIONS: readonly StataEdition[] = ['mp', 'se', 'be', 'open'];
 /** Newest first; covers future releases so a new Stata is found without an extension update. */
 const VERSIONS = ['21', '20', '19', '18', '17'];
 
@@ -48,6 +71,7 @@ export function parseEdition(value: string | undefined): StataEdition | undefine
 
 function editionFromName(name: string): StataEdition | undefined {
     const n = name.toLowerCase();
+    if (/open/.test(n)) return 'open';
     if (/mp/.test(n)) return 'mp';
     if (/se(?:-64)?(?:\.exe|\.app)?$|stata-?se/.test(n)) return 'se';
     if (/be/.test(n)) return 'be';
@@ -75,7 +99,7 @@ export function describeInstallation(
     homeEntries?: string[]
 ): StataInstallation {
     const edition: StataEdition = editionHint ?? editionFromName(path.basename(exePath)) ?? 'be';
-    const editionStr = edition === 'mp' ? 'MP (Parallel Edition)' : edition.toUpperCase();
+    const editionStr = edition === 'open' ? 'OpenStata' : edition === 'mp' ? 'MP (Parallel Edition)' : edition.toUpperCase();
 
     let version = '19';
     let fullVersion: string | undefined;

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { describeInstallation, findStataInstallations, resolveConfiguredHome, resolvePythonExecutable } from '../src/discovery.ts';
+import { describeInstallation, findStataInstallations, resolveConfiguredHome, resolvePythonExecutable, getOpenStataInstallation, runtimeIdFor } from '../src/discovery.ts';
 
 const norm = (p: string) => p.replace(/\\/g, '/').toLowerCase();
 const existsIn = (paths: string[]) => {
@@ -184,4 +184,13 @@ test('versioned Pythons in standard locations beat a generic python3 on PATH (ma
         listDir: noDirs
     });
     assert.equal(python, '/Library/Frameworks/Python.framework/Versions/3.12/bin/python3');
+});
+
+test('built-in OpenStata installation is described and identified correctly', () => {
+    const inst = getOpenStataInstallation();
+    assert.equal(inst.edition, 'open');
+    assert.equal(inst.version, '19');
+    assert.equal(inst.displayName, 'OpenStata (Built-in)');
+    assert.equal(inst.shortName, 'OpenStata');
+    assert.equal(runtimeIdFor(inst), 'stata-open-builtin');
 });

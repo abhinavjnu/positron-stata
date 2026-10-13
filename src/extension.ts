@@ -110,9 +110,7 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('stata.chooseInterpreter', () => stataEnv.chooseInterpreter()),
         vscode.commands.registerCommand('stata.connect', async () => {
             const { selected } = await stataEnv.selectPython();
-            if (!findInstallations().length) {
-                await stataEnv.diagnose();
-            } else if (!selected) {
+            if (!selected) {
                 await stataEnv.setupEnvironment();
             } else {
                 await stataEnv.startStata();
@@ -143,9 +141,6 @@ export function activate(context: vscode.ExtensionContext) {
     void (async () => {
         try {
             const installs = findInstallations();
-            if (!installs.length) {
-                return;
-            }
             if (!context.globalState.get<boolean>(WALKTHROUGH_SHOWN_KEY)) {
                 await context.globalState.update(WALKTHROUGH_SHOWN_KEY, true);
                 void vscode.commands.executeCommand('workbench.action.openWalkthrough', walkthroughId, false);
@@ -153,7 +148,7 @@ export function activate(context: vscode.ExtensionContext) {
             const { selected } = await stataEnv.selectPython();
             if (selected) {
                 await stataEnv.refreshKernelspec(selected.result.executable || selected.candidate.path);
-            } else if (installs.some(i => i.hasPyStata !== false)) {
+            } else if (installs.length === 0 || installs.some(i => i.hasPyStata !== false)) {
                 stataEnv.promptSetup();
             }
         } catch (err) {

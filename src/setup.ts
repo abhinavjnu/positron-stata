@@ -5,7 +5,7 @@ import * as positron from 'positron';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { StataInstallation, findStataInstallations, parseEdition } from './discovery';
+import { StataInstallation, findStataInstallations, parseEdition, getOpenStataInstallation, runtimeIdFor } from './discovery';
 import {
     PythonCandidate, ProbeResult, Verdict, dataDirectory, describeCandidate, enumeratePythonCandidates,
     evaluateProbe, minorFromName, probePython, MIN_PYTHON_MINOR, MAX_PYTHON_MINOR
@@ -321,11 +321,8 @@ export class StataEnvironment implements vscode.Disposable {
 
     async startStata(): Promise<void> {
         const [inst] = findInstallations();
-        if (!inst) {
-            void vscode.window.showWarningMessage('No Stata installation was found. Set positron-stata.stataHome to your Stata folder.');
-            return;
-        }
-        const runtimeId = `stata-${inst.version}-${inst.edition}-official`;
+        const targetInst = inst ?? getOpenStataInstallation();
+        const runtimeId = runtimeIdFor(targetInst);
         try {
             await positron.runtime.selectLanguageRuntime(runtimeId);
         } catch (e) {
@@ -355,11 +352,11 @@ export class StataEnvironment implements vscode.Disposable {
     async refreshKernelspec(python?: string): Promise<ProvisionResult | undefined> {
         if (!vscode.workspace.getConfiguration(CONFIG).get<boolean>('jupyterKernelspec.enabled', true)) return undefined;
         const [inst] = findInstallations().filter(i => i.hasPyStata !== false);
-        if (!inst) return undefined;
+        const targetInst = inst ?? getOpenStataInstallation();
         const exe = python ?? (await this.selectPython()).selected?.result.executable;
         if (!exe) return undefined;
         try {
-            const result = provisionKernelspec(kernelspecDir(process.platform, process.env), this.buildKernelSpec(inst, exe, true));
+            const result = provisionKernelspec(kernelspecDir(process.platform, process.env), this.buildKernelSpec(targetInst, exe, true));
             if (result.status !== 'unchanged') this.log(`Jupyter kernelspec ${result.status}: ${result.path}${result.reason ? ` (${result.reason})` : ''}`);
             return result;
         } catch (e) {
@@ -391,7 +388,7 @@ export class StataEnvironment implements vscode.Disposable {
 
         const installs = findInstallations();
         add(`Stata installations (${installs.length}):`);
-        if (!installs.length) add('  none found — set positron-stata.stataHome to your Stata folder');
+        if (!installs.length) add('  none found — built-in OpenStata engine (open-stata-core) is active for license-free operation');
         for (const i of installs) {
             add(`  ${i.displayName}`);
             add(`    home:       ${i.homeDir}`);
